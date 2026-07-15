@@ -1,0 +1,61 @@
+{
+  "name": "n8n-nodes-formbase",
+  "version": "0.1.0",
+  "description": "n8n community node for Formbase — trigger workflows from form submissions.",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "formbase",
+    "forms",
+    "webhook"
+  ],
+  "license": "MIT",
+  "homepage": "https://formbase.so",
+  "author": {
+    "name": "formbase",
+    "email": "support@formbase.so"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/formbaseso/n8n-nodes-formbase.git"
+  },
+  "bugs": {
+    "url": "https://github.com/formbaseso/n8n-nodes-formbase/issues"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "build:watch": "tsc --watch",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lintfix": "n8n-node lint --fix",
+    "test": "vitest run --config test/vitest.config.mjs",
+    "prepublishOnly": "npm test && npm run build && npm run lint"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/FormbaseApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Formbase/FormbaseTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "^0.39.3",
+    "@types/node": "^22.0.0",
+    "eslint": "9.39.4",
+    "prettier": "3.8.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
