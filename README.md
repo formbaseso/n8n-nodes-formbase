@@ -8,7 +8,7 @@ Community node for [n8n](https://n8n.io) that starts workflows when a [Formbase]
 - Trigger on abandoned submissions when partial submission tracking is enabled.
 - Load forms dynamically from every workspace available to the credential.
 - Register and remove Formbase webhook subscriptions with the n8n workflow lifecycle.
-- Connect securely with workspace-scoped Formbase API tokens.
+- Connect through workspace-scoped OAuth 2.1 with PKCE and automatic refresh-token rotation.
 
 ## Install
 
@@ -20,15 +20,18 @@ n8n-nodes-formbase
 
 Community nodes must be enabled on self-hosted n8n. Installation in n8n Cloud requires a verified community node.
 
+OAuth setup requires n8n 2.30 or newer.
+
 ## Configure credentials
 
-1. In Formbase, open **OAuth and API Keys** in the workspace sidebar.
-2. Create an API token and copy it immediately. Tokens start with `fb_` and are shown once.
-3. In n8n, create a **Formbase API** credential and paste the token.
-4. Keep **API Base URL** set to `https://api.formbase.so`.
-5. Select **Test**. n8n calls `me.get` to verify the token.
+1. In n8n, create a **Formbase OAuth2 API** credential.
+2. Select **Connect my account**.
+3. Sign in to Formbase, choose workspace, and approve requested API access.
+4. Select **Test**. n8n calls `me.get` to verify connection.
 
-Formbase API tokens expire after 30 days. Rotate the token and update the n8n credential before expiration.
+n8n registers its exact callback URL with Formbase automatically through OAuth Dynamic Client Registration. Access tokens expire after one hour and refresh automatically. Rotating refresh token remains valid while connection is used at least once every 30 days.
+
+Self-hosted n8n must use configured HTTPS public URL for OAuth callback. Loopback HTTP is supported for local development.
 
 ## Use trigger
 

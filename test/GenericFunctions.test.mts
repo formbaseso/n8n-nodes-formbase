@@ -3,12 +3,11 @@ import { NodeApiError } from 'n8n-workflow'
 
 import { formbaseApiRequest } from '../nodes/Formbase/GenericFunctions'
 
-function makeContext(httpResponse: unknown, opts?: { baseUrl?: string }) {
+function makeContext(httpResponse: unknown, opts?: { serverUrl?: string }) {
   const httpRequestWithAuthentication = vi.fn().mockResolvedValue(httpResponse)
   const ctx = {
     getCredentials: vi.fn().mockResolvedValue({
-      apiKey: 'fb_test',
-      baseUrl: opts?.baseUrl ?? 'https://api.formbase.so',
+      serverUrl: opts?.serverUrl ?? 'https://api.formbase.so/api/v1',
     }),
     getNode: vi.fn().mockReturnValue({ name: 'Formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
     helpers: {
@@ -34,7 +33,7 @@ describe('formbaseApiRequest', () => {
     expect(result).toEqual({ id: 'u1', email: 'a@b.com', name: 'Ada' })
     expect(httpRequestWithAuthentication).toHaveBeenCalledTimes(1)
     const [credentialName, options] = httpRequestWithAuthentication.mock.calls[0]
-    expect(credentialName).toBe('formbaseApi')
+    expect(credentialName).toBe('formbaseOAuth2Api')
     expect(options).toMatchObject({
       method: 'POST',
       url: 'https://api.formbase.so/api/v1',
@@ -47,7 +46,7 @@ describe('formbaseApiRequest', () => {
   it('strips trailing slashes from the configured API base URL', async () => {
     const { ctx, httpRequestWithAuthentication } = makeContext(
       { ok: true, data: null },
-      { baseUrl: 'https://example.convex.site///' }
+      { serverUrl: 'https://example.convex.site/api/v1///' }
     )
 
     await formbaseApiRequest.call(ctx as never, 'me.get')

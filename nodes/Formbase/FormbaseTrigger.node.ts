@@ -10,7 +10,7 @@ import type {
 } from 'n8n-workflow'
 import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow'
 
-import { FORMBASE_WEBHOOK_EVENTS, type FormbaseWebhookEvent } from './constants'
+import { FORMBASE_OAUTH2_CREDENTIAL_NAME, FORMBASE_WEBHOOK_EVENTS, type FormbaseWebhookEvent } from './constants'
 import { formbaseApiRequest } from './GenericFunctions'
 
 interface FormSummary {
@@ -93,7 +93,7 @@ export class FormbaseTrigger implements INodeType {
     outputs: [NodeConnectionTypes.Main],
     credentials: [
       {
-        name: 'formbaseApi',
+        name: FORMBASE_OAUTH2_CREDENTIAL_NAME,
         required: true,
       },
     ],

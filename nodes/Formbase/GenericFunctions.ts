@@ -6,7 +6,7 @@ import type {
 } from 'n8n-workflow'
 import { NodeApiError } from 'n8n-workflow'
 
-import { DEFAULT_FORMBASE_API_URL, FORMBASE_API_PATH } from './constants'
+import { FORMBASE_API_RESOURCE_URL, FORMBASE_OAUTH2_CREDENTIAL_NAME } from './constants'
 
 export type FormbaseRpcContext = IHookFunctions | ILoadOptionsFunctions | IWebhookFunctions
 
@@ -39,12 +39,12 @@ export async function formbaseApiRequest<T = unknown>(
   method: string,
   params: Record<string, unknown> = {}
 ): Promise<T> {
-  const credentials = await this.getCredentials('formbaseApi')
-  const baseUrl = String(credentials.baseUrl ?? DEFAULT_FORMBASE_API_URL).replace(/\/+$/, '')
+  const credentials = await this.getCredentials(FORMBASE_OAUTH2_CREDENTIAL_NAME)
+  const resourceUrl = String(credentials.serverUrl ?? FORMBASE_API_RESOURCE_URL).replace(/\/+$/, '')
 
   const options: IHttpRequestOptions = {
     method: 'POST',
-    url: `${baseUrl}${FORMBASE_API_PATH}`,
+    url: resourceUrl,
     body: { method, params },
     json: true,
     ignoreHttpStatusErrors: true,
@@ -52,7 +52,11 @@ export async function formbaseApiRequest<T = unknown>(
   }
 
   // HTTP helper returns untyped JSON at this external API boundary.
-  const response = (await this.helpers.httpRequestWithAuthentication.call(this, 'formbaseApi', options)) as FormbaseRpcResponse<T>
+  const response = (await this.helpers.httpRequestWithAuthentication.call(
+    this,
+    FORMBASE_OAUTH2_CREDENTIAL_NAME,
+    options
+  )) as FormbaseRpcResponse<T>
 
   if (!response || typeof response !== 'object') {
     throw new NodeApiError(this.getNode(), { message: 'Invalid response from Formbase API' })
