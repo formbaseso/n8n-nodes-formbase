@@ -7,7 +7,8 @@ export class FormbaseOAuth2Api implements ICredentialType {
 
   extends = ['oAuth2Api']
 
-  displayName = 'Formbase OAuth2 API'
+  // eslint-disable-next-line n8n-nodes-base/cred-class-field-display-name-miscased -- formbase brand is lowercase.
+  displayName = 'formbase OAuth2 API'
 
   icon: Icon = { light: 'file:../nodes/Formbase/formbase.svg', dark: 'file:../nodes/Formbase/formbase.dark.svg' }
 

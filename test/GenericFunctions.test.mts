@@ -9,7 +9,7 @@ function makeContext(httpResponse: unknown, opts?: { serverUrl?: string }) {
     getCredentials: vi.fn().mockResolvedValue({
       serverUrl: opts?.serverUrl ?? 'https://api.formbase.so/api/v1',
     }),
-    getNode: vi.fn().mockReturnValue({ name: 'Formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
+    getNode: vi.fn().mockReturnValue({ name: 'formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
     helpers: {
       httpRequestWithAuthentication,
     },

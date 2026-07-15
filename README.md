@@ -1,13 +1,13 @@
 # n8n-nodes-formbase
 
-Community node for [n8n](https://n8n.io) that starts workflows when a [Formbase](https://formbase.so) form receives a submission.
+Community node for [n8n](https://n8n.io) that starts workflows when a [formbase](https://formbase.so) form receives a submission.
 
 ## Features
 
 - Trigger on completed submissions.
 - Trigger on abandoned submissions when partial submission tracking is enabled.
 - Load forms dynamically from every workspace available to the credential.
-- Register and remove Formbase webhook subscriptions with the n8n workflow lifecycle.
+- Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.
 - Connect through workspace-scoped OAuth 2.1 with PKCE and automatic refresh-token rotation.
 
 ## Install
@@ -24,27 +24,27 @@ OAuth setup requires n8n 2.30 or newer.
 
 ## Configure credentials
 
-1. In n8n, create a **Formbase OAuth2 API** credential.
+1. In n8n, create a **formbase OAuth2 API** credential.
 2. Select **Connect my account**.
-3. Sign in to Formbase, choose workspace, and approve requested API access.
+3. Sign in to formbase, choose workspace, and approve requested API access.
 4. Select **Test**. n8n calls `me.get` to verify connection.
 
-n8n registers its exact callback URL with Formbase automatically through OAuth Dynamic Client Registration. Access tokens expire after one hour and refresh automatically. Rotating refresh token remains valid while connection is used at least once every 30 days.
+n8n registers its exact callback URL with formbase automatically through OAuth Dynamic Client Registration. Access tokens expire after one hour and refresh automatically. Rotating refresh token remains valid while connection is used at least once every 30 days.
 
 Self-hosted n8n must use configured HTTPS public URL for OAuth callback. Loopback HTTP is supported for local development.
 
 ## Use trigger
 
-1. Add **Formbase Trigger** to a workflow.
+1. Add **formbase Trigger** to a workflow.
 2. Select form and event.
 3. For a test execution, select **Listen for Test Event**, then submit the selected form.
-4. Activate the workflow. n8n registers its production webhook with Formbase and removes it when the workflow is deactivated or deleted.
+4. Activate the workflow. n8n registers its production webhook with formbase and removes it when the workflow is deactivated or deleted.
 
 n8n webhook URL must be publicly reachable over HTTPS. For reverse-proxy or tunnel deployments, configure n8n's `WEBHOOK_URL` so generated webhook URLs use public origin.
 
 ## Output
 
-Each webhook produces one n8n item containing Formbase payload:
+Each webhook produces one n8n item containing formbase payload:
 
 ```json
 {
@@ -78,7 +78,7 @@ Each webhook produces one n8n item containing Formbase payload:
 
 `eventType` is `SUBMIT_RESPONSE` for a new completed or abandoned response and `UPDATE_RESPONSE` when an existing response changes. Use `eventId` to deduplicate retries.
 
-Full contracts: [Formbase API methods](https://docs.formbase.so/developers/rest-api) and [webhook reference](https://docs.formbase.so/developers/webhooks-reference).
+Full contracts: [formbase API methods](https://docs.formbase.so/developers/rest-api) and [webhook reference](https://docs.formbase.so/developers/webhooks-reference).
 
 ## Develop
 

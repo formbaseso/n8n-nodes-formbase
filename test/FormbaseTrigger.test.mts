@@ -12,7 +12,7 @@ const mockedRequest = formbaseApiRequest as unknown as ReturnType<typeof vi.fn>
 
 function makeLoadOptionsContext() {
   return {
-    getNode: vi.fn().mockReturnValue({ name: 'Formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
+    getNode: vi.fn().mockReturnValue({ name: 'formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
   }
 }
 
@@ -31,10 +31,20 @@ function makeHookContext(opts: {
       return undefined
     }),
     getWorkflowStaticData: vi.fn().mockReturnValue(staticData),
-    getNode: vi.fn().mockReturnValue({ name: 'Formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
+    getNode: vi.fn().mockReturnValue({ name: 'formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
     _staticData: staticData,
   }
 }
+
+describe('formbase Trigger description', () => {
+  it('uses lowercase formbase branding', () => {
+    const trigger = new FormbaseTrigger()
+
+    expect(trigger.description.displayName).toBe('formbase Trigger')
+    expect(trigger.description.description).toContain('formbase')
+    expect(trigger.description.description).not.toContain('Formbase')
+  })
+})
 
 describe('FormbaseTrigger.methods.loadOptions.getForms', () => {
   beforeEach(() => mockedRequest.mockReset())

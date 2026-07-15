@@ -7,6 +7,7 @@ describe('FormbaseOAuth2Api', () => {
     const credential = new FormbaseOAuth2Api()
 
     expect(credential.name).toBe('formbaseOAuth2Api')
+    expect(credential.displayName).toBe('formbase OAuth2 API')
     expect(credential.extends).toEqual(['oAuth2Api'])
     expect(credential.properties).toEqual([
       expect.objectContaining({

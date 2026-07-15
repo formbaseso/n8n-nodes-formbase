@@ -57,7 +57,7 @@ async function listWorkspaceForms(context: ILoadOptionsFunctions, workspace: Wor
     forms.push(...result.items)
     if (!result.hasMore) break
     if (!result.nextCursor) {
-      throw new NodeApiError(context.getNode(), { message: 'Formbase returned an incomplete forms page' })
+      throw new NodeApiError(context.getNode(), { message: 'formbase returned an incomplete forms page' })
     }
     cursor = result.nextCursor
   } while (cursor)
@@ -78,16 +78,16 @@ function findWebhookSubscription(
 
 export class FormbaseTrigger implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Formbase Trigger',
+    displayName: 'formbase Trigger',
     name: 'formbaseTrigger',
     icon: { light: 'file:formbase.svg', dark: 'file:formbase.dark.svg' },
     group: ['trigger'],
     version: 1,
     subtitle: '={{$parameter["event"]}}',
-    description: 'Starts the workflow when a Formbase form receives a submission',
+    description: 'Starts the workflow when a formbase form receives a submission',
     usableAsTool: true,
     defaults: {
-      name: 'Formbase Trigger',
+      name: 'formbase Trigger',
     },
     inputs: [],
     outputs: [NodeConnectionTypes.Main],
@@ -106,14 +106,14 @@ export class FormbaseTrigger implements INodeType {
       },
     ],
     triggerPanel: {
-      header: 'Listening for Formbase submissions',
+      header: 'Listening for formbase submissions',
       executionsHelp: {
         inactive:
           'While building the workflow, click <em>Listen for Test Event</em> and submit the form once. New submissions arrive in real time after the workflow is activated.',
         active:
           'New submissions to the selected form trigger this workflow. The webhook remains registered while the workflow is active.',
       },
-      activationHint: 'Activate the workflow to register the webhook with Formbase. Deactivating removes it.',
+      activationHint: 'Activate the workflow to register the webhook with formbase. Deactivating removes it.',
     },
     properties: [
       {

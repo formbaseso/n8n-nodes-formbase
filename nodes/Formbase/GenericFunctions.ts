@@ -59,12 +59,12 @@ export async function formbaseApiRequest<T = unknown>(
   )) as FormbaseRpcResponse<T>
 
   if (!response || typeof response !== 'object') {
-    throw new NodeApiError(this.getNode(), { message: 'Invalid response from Formbase API' })
+    throw new NodeApiError(this.getNode(), { message: 'Invalid response from formbase API' })
   }
 
   if (response.ok === false) {
     const code = response.error?.code ?? 'INTERNAL_ERROR'
-    const message = response.error?.message ?? 'Formbase API error'
+    const message = response.error?.message ?? 'formbase API error'
     throw new NodeApiError(this.getNode(), { message, code }, {
       message: `${code}: ${message}`,
       httpCode: String(ERROR_CODE_TO_HTTP[code] ?? 500),
@@ -72,7 +72,7 @@ export async function formbaseApiRequest<T = unknown>(
   }
 
   if (response.ok !== true || !('data' in response)) {
-    throw new NodeApiError(this.getNode(), { message: 'Invalid response from Formbase API' })
+    throw new NodeApiError(this.getNode(), { message: 'Invalid response from formbase API' })
   }
 
   return response.data
