@@ -27,7 +27,7 @@ export class FormbaseApi implements ICredentialType {
       type: 'string',
       default: DEFAULT_FORMBASE_API_URL,
       required: true,
-      description: 'Formbase API origin. Change only for a self-hosted deployment; omit a trailing slash.',
+      description: 'Formbase API origin. Keep the default unless Formbase support provides a different URL.',
     },
   ]
 

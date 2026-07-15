@@ -8,7 +8,7 @@ Community node for [n8n](https://n8n.io) that starts workflows when a [Formbase]
 - Trigger on abandoned submissions when partial submission tracking is enabled.
 - Load forms dynamically from every workspace available to the credential.
 - Register and remove Formbase webhook subscriptions with the n8n workflow lifecycle.
-- Connect to Formbase Cloud or a self-hosted Formbase API.
+- Connect securely with workspace-scoped Formbase API tokens.
 
 ## Install
 
@@ -25,7 +25,7 @@ Community nodes must be enabled on self-hosted n8n. Installation in n8n Cloud re
 1. In Formbase, open **OAuth and API Keys** in the workspace sidebar.
 2. Create an API token and copy it immediately. Tokens start with `fb_` and are shown once.
 3. In n8n, create a **Formbase API** credential and paste the token.
-4. Keep **API Base URL** set to `https://api.formbase.so` unless using a self-hosted Formbase deployment.
+4. Keep **API Base URL** set to `https://api.formbase.so`.
 5. Select **Test**. n8n calls `me.get` to verify the token.
 
 Formbase API tokens expire after 30 days. Rotate the token and update the n8n credential before expiration.
