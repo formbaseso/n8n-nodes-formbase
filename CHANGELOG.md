@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here.
 
+## 0.2.1 - 2026-07-15
+
+- Replace placeholder node and credential icons with the formbase brand mark.
+- Show human-readable trigger subtitles and event descriptions.
+- Add n8n codex metadata for categories and documentation links.
+
 ## 0.2.0 - 2026-07-15
 
 - Replace expiring manual API-key credentials with OAuth 2.1 authorization code + PKCE.

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { NodeApiError } from 'n8n-workflow'
 
 vi.mock('../nodes/Formbase/GenericFunctions', () => ({
@@ -43,6 +44,48 @@ describe('formbase Trigger description', () => {
     expect(trigger.description.displayName).toBe('formbase Trigger')
     expect(trigger.description.description).toContain('formbase')
     expect(trigger.description.description).not.toContain('Formbase')
+    expect(trigger.description.icon).toEqual({
+      light: 'file:formbase-logo.svg',
+      dark: 'file:formbase-logo.dark.svg',
+    })
+  })
+
+  it('uses human-facing trigger labels and descriptions', () => {
+    const trigger = new FormbaseTrigger()
+    const eventProperty = trigger.description.properties.find((property) => property.name === 'event')
+
+    expect(trigger.description.subtitle).toContain('On submission created')
+    expect(trigger.description.subtitle).toContain('On submission abandoned')
+    expect(eventProperty).toMatchObject({
+      options: [
+        {
+          name: 'Submission Abandoned',
+          value: 'submission_abandoned',
+          action: 'On submission abandoned',
+          description:
+            'Runs when a respondent leaves the selected form before submitting it; requires partial submission tracking',
+        },
+        {
+          name: 'Submission Created',
+          value: 'submission_created',
+          action: 'On submission created',
+          description: 'Runs when a respondent submits the selected form',
+        },
+      ],
+    })
+  })
+
+  it('ships codex metadata for n8n discovery and documentation', () => {
+    const codex = JSON.parse(
+      readFileSync(new URL('../nodes/Formbase/FormbaseTrigger.node.json', import.meta.url), 'utf8')
+    ) as Record<string, unknown>
+
+    expect(codex).toMatchObject({
+      node: 'n8n-nodes-formbase',
+      nodeVersion: '1.0',
+      codexVersion: '1.0',
+      categories: ['Marketing & Content', 'Productivity'],
+    })
   })
 })
 

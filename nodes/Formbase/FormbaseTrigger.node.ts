@@ -80,10 +80,11 @@ export class FormbaseTrigger implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'formbase Trigger',
     name: 'formbaseTrigger',
-    icon: { light: 'file:formbase.svg', dark: 'file:formbase.dark.svg' },
+    icon: { light: 'file:formbase-logo.svg', dark: 'file:formbase-logo.dark.svg' },
     group: ['trigger'],
     version: 1,
-    subtitle: '={{$parameter["event"]}}',
+    subtitle:
+      '={{ $parameter["event"] === "submission_created" ? "On submission created" : "On submission abandoned" }}',
     description: 'Starts the workflow when a formbase form receives a submission',
     usableAsTool: true,
     defaults: {
@@ -135,10 +136,15 @@ export class FormbaseTrigger implements INodeType {
           {
             name: 'Submission Abandoned',
             value: FORMBASE_WEBHOOK_EVENTS.submissionAbandoned,
+            action: 'On submission abandoned',
+            description:
+              'Runs when a respondent leaves the selected form before submitting it; requires partial submission tracking',
           },
           {
             name: 'Submission Created',
             value: FORMBASE_WEBHOOK_EVENTS.submissionCreated,
+            action: 'On submission created',
+            description: 'Runs when a respondent submits the selected form',
           },
         ],
         default: 'submission_created',
