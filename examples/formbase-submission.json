@@ -1,0 +1,77 @@
+{
+  "name": "Handle formbase submission",
+  "nodes": [
+    {
+      "parameters": {
+        "formId": "",
+        "event": "submission_created"
+      },
+      "type": "n8n-nodes-formbase.formbaseTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "id": "16e911f0-6385-4acc-8286-1afb15eb035c",
+      "name": "formbase Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cdcb57d7-377e-45e2-8da9-63e52f4690b4",
+              "name": "eventId",
+              "value": "={{ $json.eventId }}",
+              "type": "string"
+            },
+            {
+              "id": "b27b42be-fc5d-491f-a93b-02a7fa4e63f8",
+              "name": "submissionId",
+              "value": "={{ $json.submission.id }}",
+              "type": "string"
+            },
+            {
+              "id": "2b171786-cb32-4e73-96e5-d60f39060fe1",
+              "name": "respondentEmail",
+              "value": "={{ $json.submission.respondentEmail }}",
+              "type": "string"
+            },
+            {
+              "id": "a6366cdf-c3b9-4bdc-be3c-723d2bfab7a4",
+              "name": "formName",
+              "value": "={{ $json.form.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 0],
+      "id": "27abc7e3-21e9-4654-9078-b12b60420f6d",
+      "name": "Prepare submission"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "formbase Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0f0cc0ea-543e-43ac-bf55-9256b1ee5f85",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

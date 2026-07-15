@@ -8,6 +8,7 @@ Community node for [n8n](https://n8n.io) that starts workflows when a [formbase]
 - Trigger on abandoned submissions when partial submission tracking is enabled.
 - Load forms dynamically from every workspace available to the credential.
 - Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.
+- Verify every webhook with HMAC-SHA256 and reject stale or forged requests.
 - Connect through workspace-scoped OAuth 2.1 with PKCE and automatic refresh-token rotation.
 
 ## Install
@@ -41,6 +42,12 @@ Self-hosted n8n must use configured HTTPS public URL for OAuth callback. Loopbac
 4. Activate the workflow. n8n registers its production webhook with formbase and removes it when the workflow is deactivated or deleted.
 
 n8n webhook URL must be publicly reachable over HTTPS. For reverse-proxy or tunnel deployments, configure n8n's `WEBHOOK_URL` so generated webhook URLs use public origin.
+
+n8n generates a separate 256-bit signing secret for each registration. Incoming requests must contain a valid `X-formbase-Signature` header with a timestamp no more than five minutes old. Missing, stale, or invalid signatures receive `401 Unauthorized` and do not start the workflow.
+
+## Example workflow
+
+Import [`examples/formbase-submission.json`](examples/formbase-submission.json), connect formbase credential, select form, then activate workflow. Example maps event ID, submission ID, respondent email, and form name into stable output fields.
 
 ## Output
 

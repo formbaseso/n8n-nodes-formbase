@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHmac } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { NodeApiError } from 'n8n-workflow'
 
@@ -34,6 +35,44 @@ function makeHookContext(opts: {
     getWorkflowStaticData: vi.fn().mockReturnValue(staticData),
     getNode: vi.fn().mockReturnValue({ name: 'formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }),
     _staticData: staticData,
+  }
+}
+
+function signWebhookBody(secret: string, timestamp: number, rawBody: string): string {
+  const digest = createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex')
+  return `t=${timestamp},sha256=${digest}`
+}
+
+function makeWebhookContext(opts: {
+  body: Record<string, unknown>
+  secret?: string
+  signatureHeader?: string
+  rawBody?: string | false
+}) {
+  const rawBody = opts.rawBody === false ? undefined : Buffer.from(opts.rawBody ?? JSON.stringify(opts.body))
+  const response = {
+    status: vi.fn(),
+    send: vi.fn(),
+    end: vi.fn(),
+  }
+  response.status.mockReturnValue(response)
+  response.send.mockReturnValue(response)
+  response.end.mockReturnValue(response)
+
+  return {
+    getBodyData: vi.fn().mockReturnValue(opts.body),
+    getHeaderData: vi.fn().mockReturnValue(
+      opts.signatureHeader === undefined ? {} : { 'x-formbase-signature': opts.signatureHeader }
+    ),
+    getRequestObject: vi.fn().mockReturnValue(rawBody === undefined ? {} : { rawBody }),
+    getResponseObject: vi.fn().mockReturnValue(response),
+    getWorkflowStaticData: vi.fn().mockReturnValue(
+      opts.secret === undefined ? {} : { webhookSecret: opts.secret }
+    ),
+    helpers: {
+      returnJsonArray: (input: unknown) => [{ json: input }],
+    },
+    _response: response,
   }
 }
 
@@ -75,6 +114,12 @@ describe('formbase Trigger description', () => {
     })
   })
 
+  it('does not expose the webhook trigger as an AI tool', () => {
+    const trigger = new FormbaseTrigger()
+
+    expect(trigger.description.usableAsTool).toBeUndefined()
+  })
+
   it('ships codex metadata for n8n discovery and documentation', () => {
     const codex = JSON.parse(
       readFileSync(new URL('../nodes/Formbase/FormbaseTrigger.node.json', import.meta.url), 'utf8')
@@ -86,6 +131,18 @@ describe('formbase Trigger description', () => {
       codexVersion: '1.0',
       categories: ['Marketing & Content', 'Productivity'],
     })
+  })
+
+  it('ships an importable example workflow', () => {
+    const workflow = JSON.parse(
+      readFileSync(new URL('../examples/formbase-submission.json', import.meta.url), 'utf8')
+    ) as { nodes: Array<{ type: string }>; active: boolean }
+
+    expect(workflow.active).toBe(false)
+    expect(workflow.nodes.map((node) => node.type)).toEqual([
+      'n8n-nodes-formbase.formbaseTrigger',
+      'n8n-nodes-base.set',
+    ])
   })
 })
 
@@ -179,8 +236,12 @@ describe('FormbaseTrigger.methods.loadOptions.getForms', () => {
 describe('FormbaseTrigger.webhookMethods.default.checkExists', () => {
   beforeEach(() => mockedRequest.mockReset())
 
-  it('stores the matching n8n subscription ID', async () => {
-    const ctx = makeHookContext({ webhookUrl: 'https://n8n.example/hook/X', formId: 'f1' })
+  it('recognizes the matching signed n8n subscription', async () => {
+    const ctx = makeHookContext({
+      webhookUrl: 'https://n8n.example/hook/X',
+      formId: 'f1',
+      staticData: { subscriptionId: 'sub_match', webhookSecret: `whsec_${'a'.repeat(64)}` },
+    })
     mockedRequest.mockResolvedValue({
       items: [
         {
@@ -213,6 +274,34 @@ describe('FormbaseTrigger.webhookMethods.default.checkExists', () => {
     expect(mockedRequest).toHaveBeenCalledWith('webhooks.list', { formId: 'f1' })
   })
 
+  it('removes an unsigned matching subscription so activation can replace it', async () => {
+    const ctx = makeHookContext({
+      webhookUrl: 'https://n8n.example/hook/X',
+      formId: 'f1',
+      staticData: { subscriptionId: 'sub_unsigned' },
+    })
+    mockedRequest.mockResolvedValueOnce({
+      items: [
+        {
+          subscriptionId: 'sub_unsigned',
+          targetUrl: 'https://n8n.example/hook/X',
+          provider: 'n8n',
+          eventType: 'submission_created',
+        },
+      ],
+      hasMore: false,
+    })
+    mockedRequest.mockResolvedValueOnce({ subscriptionId: 'sub_unsigned', deleted: true })
+
+    const trigger = new FormbaseTrigger()
+    const exists = await trigger.webhookMethods.default.checkExists.call(ctx as never)
+
+    expect(exists).toBe(false)
+    expect(mockedRequest).toHaveBeenNthCalledWith(2, 'webhooks.delete', { subscriptionId: 'sub_unsigned' })
+    expect(ctx._staticData.subscriptionId).toBeUndefined()
+    expect(ctx._staticData.webhookSecret).toBeUndefined()
+  })
+
   it('returns false when no matching subscription exists', async () => {
     const ctx = makeHookContext({ webhookUrl: 'https://n8n.example/hook/X' })
     mockedRequest.mockResolvedValue({ items: [], hasMore: false })
@@ -237,7 +326,7 @@ describe('FormbaseTrigger.webhookMethods.default.checkExists', () => {
 describe('FormbaseTrigger.webhookMethods.default.create', () => {
   beforeEach(() => mockedRequest.mockReset())
 
-  it('registers the selected event and stores the subscription ID', async () => {
+  it('registers the selected event with a signing secret and stores both IDs', async () => {
     const ctx = makeHookContext({
       webhookUrl: 'https://n8n.example/hook/NEW',
       formId: 'f1',
@@ -254,8 +343,11 @@ describe('FormbaseTrigger.webhookMethods.default.create', () => {
       targetUrl: 'https://n8n.example/hook/NEW',
       provider: 'n8n',
       eventType: 'submission_abandoned',
+      signingSecret: expect.stringMatching(/^whsec_[a-f0-9]{64}$/),
     })
     expect(ctx._staticData.subscriptionId).toBe('sub_new')
+    const createParams = mockedRequest.mock.calls[0][1] as { signingSecret: string }
+    expect(ctx._staticData.webhookSecret).toBe(createParams.signingSecret)
   })
 })
 
@@ -263,7 +355,9 @@ describe('FormbaseTrigger.webhookMethods.default.delete', () => {
   beforeEach(() => mockedRequest.mockReset())
 
   it('deletes the stored subscription and clears static data', async () => {
-    const ctx = makeHookContext({ staticData: { subscriptionId: 'sub_xyz' } })
+    const ctx = makeHookContext({
+      staticData: { subscriptionId: 'sub_xyz', webhookSecret: `whsec_${'a'.repeat(64)}` },
+    })
     mockedRequest.mockResolvedValue({ subscriptionId: 'sub_xyz', deleted: true })
 
     const trigger = new FormbaseTrigger()
@@ -272,6 +366,7 @@ describe('FormbaseTrigger.webhookMethods.default.delete', () => {
     expect(deleted).toBe(true)
     expect(mockedRequest).toHaveBeenCalledWith('webhooks.delete', { subscriptionId: 'sub_xyz' })
     expect(ctx._staticData.subscriptionId).toBeUndefined()
+    expect(ctx._staticData.webhookSecret).toBeUndefined()
   })
 
   it('is a no-op when no subscription ID is stored', async () => {
@@ -314,18 +409,63 @@ describe('FormbaseTrigger.webhookMethods.default.delete', () => {
 })
 
 describe('FormbaseTrigger.webhook', () => {
-  it('emits the webhook body as one n8n item', async () => {
+  it('emits a valid signed webhook body as one n8n item', async () => {
     const body = { eventId: 'e1', eventType: 'SUBMIT_RESPONSE' }
-    const ctx = {
-      getBodyData: vi.fn().mockReturnValue(body),
-      helpers: {
-        returnJsonArray: (input: unknown) => [{ json: input }],
-      },
-    }
+    const secret = `whsec_${'a'.repeat(64)}`
+    const rawBody = JSON.stringify(body)
+    const timestamp = Math.floor(Date.now() / 1000)
+    const ctx = makeWebhookContext({
+      body,
+      secret,
+      rawBody,
+      signatureHeader: signWebhookBody(secret, timestamp, rawBody),
+    })
 
     const trigger = new FormbaseTrigger()
     const result = await trigger.webhook.call(ctx as never)
 
     expect(result.workflowData).toEqual([[{ json: body }]])
+    expect(ctx._response.status).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing signature', undefined, undefined],
+    ['invalid signature', `t=${Math.floor(Date.now() / 1000)},sha256=${'0'.repeat(64)}`, undefined],
+    ['missing raw body', 'valid', false],
+  ] as const)('rejects %s', async (_name, signatureHeader, rawBody) => {
+    const body = { eventId: 'e1', eventType: 'SUBMIT_RESPONSE' }
+    const secret = `whsec_${'a'.repeat(64)}`
+    const serializedBody = JSON.stringify(body)
+    const timestamp = Math.floor(Date.now() / 1000)
+    const resolvedHeader =
+      signatureHeader === 'valid' ? signWebhookBody(secret, timestamp, serializedBody) : signatureHeader
+    const ctx = makeWebhookContext({ body, secret, signatureHeader: resolvedHeader, rawBody })
+
+    const trigger = new FormbaseTrigger()
+    const result = await trigger.webhook.call(ctx as never)
+
+    expect(result).toEqual({ noWebhookResponse: true })
+    expect(ctx._response.status).toHaveBeenCalledWith(401)
+    expect(ctx._response.send).toHaveBeenCalledWith('Unauthorized')
+    expect(ctx.getBodyData).not.toHaveBeenCalled()
+  })
+
+  it('rejects a valid signature outside the five-minute replay window', async () => {
+    const body = { eventId: 'e1', eventType: 'SUBMIT_RESPONSE' }
+    const secret = `whsec_${'a'.repeat(64)}`
+    const rawBody = JSON.stringify(body)
+    const timestamp = Math.floor(Date.now() / 1000) - 301
+    const ctx = makeWebhookContext({
+      body,
+      secret,
+      rawBody,
+      signatureHeader: signWebhookBody(secret, timestamp, rawBody),
+    })
+
+    const trigger = new FormbaseTrigger()
+    const result = await trigger.webhook.call(ctx as never)
+
+    expect(result).toEqual({ noWebhookResponse: true })
+    expect(ctx._response.status).toHaveBeenCalledWith(401)
   })
 })

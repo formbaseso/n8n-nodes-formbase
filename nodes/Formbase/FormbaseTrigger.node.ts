@@ -11,6 +11,7 @@ import type {
 import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow'
 
 import { FORMBASE_OAUTH2_CREDENTIAL_NAME, FORMBASE_WEBHOOK_EVENTS, type FormbaseWebhookEvent } from './constants'
+import { createFormbaseWebhookSecret, verifyFormbaseWebhookSignature } from './FormbaseWebhookSignature'
 import { formbaseApiRequest } from './GenericFunctions'
 
 interface FormSummary {
@@ -76,6 +77,12 @@ function findWebhookSubscription(
   )
 }
 
+function clearWebhookRegistration(webhookData: IDataObject): void {
+  delete webhookData.subscriptionId
+  delete webhookData.webhookSecret
+}
+
+/* eslint-disable @n8n/community-nodes/node-usable-as-tool -- Webhook triggers receive events and have no executable AI-agent action. */
 export class FormbaseTrigger implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'formbase Trigger',
@@ -86,7 +93,6 @@ export class FormbaseTrigger implements INodeType {
     subtitle:
       '={{ $parameter["event"] === "submission_created" ? "On submission created" : "On submission abandoned" }}',
     description: 'Starts the workflow when a formbase form receives a submission',
-    usableAsTool: true,
     defaults: {
       name: 'formbase Trigger',
     },
@@ -190,10 +196,21 @@ export class FormbaseTrigger implements INodeType {
         })) as ListResponse<WebhookSubscription>
 
         const match = findWebhookSubscription(result.items, webhookUrl, eventType)
-        if (match) {
-          webhookData.subscriptionId = match.subscriptionId
-          return true
+        if (!match) {
+          clearWebhookRegistration(webhookData)
+          return false
         }
+
+        const registrationMatchesStaticData =
+          webhookData.subscriptionId === match.subscriptionId && typeof webhookData.webhookSecret === 'string'
+        if (registrationMatchesStaticData) return true
+
+        // Existing unsigned or stale registrations cannot be verified. Replace them
+        // during activation instead of leaving a second delivery path active.
+        await formbaseApiRequest.call(this, 'webhooks.delete', {
+          subscriptionId: match.subscriptionId,
+        })
+        clearWebhookRegistration(webhookData)
         return false
       },
 
@@ -202,23 +219,29 @@ export class FormbaseTrigger implements INodeType {
         if (!webhookUrl) return false
         const formId = this.getNodeParameter('formId') as string
         const eventType = this.getNodeParameter('event') as FormbaseWebhookEvent
+        const webhookSecret = createFormbaseWebhookSecret()
 
         const created = (await formbaseApiRequest.call(this, 'webhooks.create', {
           formId,
           targetUrl: webhookUrl,
           provider: 'n8n',
           eventType,
+          signingSecret: webhookSecret,
         })) as WebhookCreateResponse
 
         const webhookData = this.getWorkflowStaticData('node')
         webhookData.subscriptionId = created.subscriptionId
+        webhookData.webhookSecret = webhookSecret
         return true
       },
 
       async delete(this: IHookFunctions): Promise<boolean> {
         const webhookData = this.getWorkflowStaticData('node')
         const subscriptionId = webhookData.subscriptionId
-        if (typeof subscriptionId !== 'string') return true
+        if (typeof subscriptionId !== 'string') {
+          clearWebhookRegistration(webhookData)
+          return true
+        }
 
         try {
           await formbaseApiRequest.call(this, 'webhooks.delete', {
@@ -229,16 +252,22 @@ export class FormbaseTrigger implements INodeType {
             return false
           }
         }
-        delete webhookData.subscriptionId
+        clearWebhookRegistration(webhookData)
         return true
       },
     },
   }
 
   async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
+    if (!verifyFormbaseWebhookSignature(this)) {
+      this.getResponseObject().status(401).send('Unauthorized').end()
+      return { noWebhookResponse: true }
+    }
+
     const body: IDataObject = this.getBodyData()
     return {
       workflowData: [this.helpers.returnJsonArray(body)],
     }
   }
 }
+/* eslint-enable @n8n/community-nodes/node-usable-as-tool */

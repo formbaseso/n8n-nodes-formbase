@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-formbase",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "n8n community node for formbase — trigger workflows from form submissions.",
   "keywords": [
     "n8n-community-node-package",
@@ -32,7 +32,8 @@
     "prepublishOnly": "npm test && npm run build && npm run lint"
   },
   "files": [
-    "dist"
+    "dist",
+    "examples"
   ],
   "engines": {
     "node": ">=22"

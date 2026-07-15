@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here.
 
+## 0.3.0 - 2026-07-15
+
+- Sign webhook registrations and reject missing, invalid, or stale delivery signatures.
+- Disable unsupported AI-tool exposure for webhook trigger.
+- Add importable example workflow.
+
 ## 0.2.1 - 2026-07-15
 
 - Replace placeholder node and credential icons with the formbase brand mark.
