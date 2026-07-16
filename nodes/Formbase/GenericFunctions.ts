@@ -47,7 +47,6 @@ export async function formbaseApiRequest<T = unknown>(
     url: resourceUrl,
     body: { method, params },
     json: true,
-    ignoreHttpStatusErrors: true,
     returnFullResponse: false,
   }
 

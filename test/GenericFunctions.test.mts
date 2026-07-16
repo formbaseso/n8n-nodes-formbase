@@ -38,9 +38,9 @@ describe('formbaseApiRequest', () => {
       method: 'POST',
       url: 'https://api.formbase.so/api/v1',
       body: { method: 'me.get', params: {} },
-      ignoreHttpStatusErrors: true,
       json: true,
     })
+    expect(options).not.toHaveProperty('ignoreHttpStatusErrors')
   })
 
   it('strips trailing slashes from the configured API base URL', async () => {

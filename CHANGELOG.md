@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented here.
 
+## 0.4.1 - 2026-07-16
+
+- Allow n8n OAuth credentials to refresh expired access tokens automatically.
+
 ## 0.4.0 - 2026-07-16
 
 - Require and persist a selectable idle window for abandoned-submission registrations.
