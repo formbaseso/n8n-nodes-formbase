@@ -22,6 +22,7 @@ function makeHookContext(opts: {
   webhookUrl?: string
   formId?: string
   event?: string
+  idleWindow?: string
   staticData?: Record<string, unknown>
 }) {
   const staticData: Record<string, unknown> = opts.staticData ?? {}
@@ -30,6 +31,7 @@ function makeHookContext(opts: {
     getNodeParameter: vi.fn((name: string) => {
       if (name === 'formId') return opts.formId ?? 'form_1'
       if (name === 'event') return opts.event ?? 'submission_created'
+      if (name === 'idleWindow') return opts.idleWindow ?? '12h'
       return undefined
     }),
     getWorkflowStaticData: vi.fn().mockReturnValue(staticData),
@@ -92,6 +94,7 @@ describe('formbase Trigger description', () => {
   it('uses human-facing trigger labels and descriptions', () => {
     const trigger = new FormbaseTrigger()
     const eventProperty = trigger.description.properties.find((property) => property.name === 'event')
+    const idleWindowProperty = trigger.description.properties.find((property) => property.name === 'idleWindow')
 
     expect(trigger.description.subtitle).toContain('On submission created')
     expect(trigger.description.subtitle).toContain('On submission abandoned')
@@ -110,6 +113,17 @@ describe('formbase Trigger description', () => {
           action: 'On submission created',
           description: 'Runs when a respondent submits the selected form',
         },
+      ],
+    })
+    expect(idleWindowProperty).toMatchObject({
+      displayOptions: { show: { event: ['submission_abandoned'] } },
+      default: '12h',
+      required: true,
+      options: [
+        { name: '1 Day', value: '1d' },
+        { name: '1 Week', value: '1w' },
+        { name: '12 Hours', value: '12h' },
+        { name: '3 Days', value: '3d' },
       ],
     })
   })
@@ -136,13 +150,22 @@ describe('formbase Trigger description', () => {
   it('ships an importable example workflow', () => {
     const workflow = JSON.parse(
       readFileSync(new URL('../examples/formbase-submission.json', import.meta.url), 'utf8')
-    ) as { nodes: Array<{ type: string }>; active: boolean }
+    ) as {
+      nodes: Array<{
+        type: string
+        parameters?: { assignments?: { assignments?: Array<{ name: string; value: string }> } }
+      }>
+      active: boolean
+    }
 
     expect(workflow.active).toBe(false)
     expect(workflow.nodes.map((node) => node.type)).toEqual([
       'n8n-nodes-formbase.formbaseTrigger',
       'n8n-nodes-base.set',
     ])
+    expect(workflow.nodes[1]?.parameters?.assignments?.assignments).toContainEqual(
+      expect.objectContaining({ name: 'eventType', value: '={{ $json.eventType }}' })
+    )
   })
 })
 
@@ -313,6 +336,37 @@ describe('FormbaseTrigger.webhookMethods.default.checkExists', () => {
     expect(ctx._staticData.subscriptionId).toBeUndefined()
   })
 
+  it('replaces an abandoned subscription when its idle window changed', async () => {
+    const ctx = makeHookContext({
+      webhookUrl: 'https://n8n.example/hook/X',
+      formId: 'f1',
+      event: 'submission_abandoned',
+      idleWindow: '3d',
+      staticData: { subscriptionId: 'sub_old', webhookSecret: `whsec_${'a'.repeat(64)}` },
+    })
+    mockedRequest.mockResolvedValueOnce({
+      items: [
+        {
+          subscriptionId: 'sub_old',
+          targetUrl: 'https://n8n.example/hook/X',
+          provider: 'n8n',
+          eventType: 'submission_abandoned',
+          idleWindow: '12h',
+        },
+      ],
+      hasMore: false,
+    })
+    mockedRequest.mockResolvedValueOnce({ subscriptionId: 'sub_old', deleted: true })
+
+    const trigger = new FormbaseTrigger()
+    const exists = await trigger.webhookMethods.default.checkExists.call(ctx as never)
+
+    expect(exists).toBe(false)
+    expect(mockedRequest).toHaveBeenNthCalledWith(2, 'webhooks.delete', { subscriptionId: 'sub_old' })
+    expect(ctx._staticData.subscriptionId).toBeUndefined()
+    expect(ctx._staticData.webhookSecret).toBeUndefined()
+  })
+
   it('returns false without an API call when formId is empty', async () => {
     const ctx = makeHookContext({ formId: '' })
     const trigger = new FormbaseTrigger()
@@ -331,6 +385,7 @@ describe('FormbaseTrigger.webhookMethods.default.create', () => {
       webhookUrl: 'https://n8n.example/hook/NEW',
       formId: 'f1',
       event: 'submission_abandoned',
+      idleWindow: '3d',
     })
     mockedRequest.mockResolvedValue({ subscriptionId: 'sub_new' })
 
@@ -343,11 +398,26 @@ describe('FormbaseTrigger.webhookMethods.default.create', () => {
       targetUrl: 'https://n8n.example/hook/NEW',
       provider: 'n8n',
       eventType: 'submission_abandoned',
+      idleWindow: '3d',
       signingSecret: expect.stringMatching(/^whsec_[a-f0-9]{64}$/),
     })
     expect(ctx._staticData.subscriptionId).toBe('sub_new')
     const createParams = mockedRequest.mock.calls[0][1] as { signingSecret: string }
     expect(ctx._staticData.webhookSecret).toBe(createParams.signingSecret)
+  })
+
+  it('omits idleWindow for completed-submission registrations', async () => {
+    const ctx = makeHookContext({
+      webhookUrl: 'https://n8n.example/hook/NEW',
+      formId: 'f1',
+      event: 'submission_created',
+    })
+    mockedRequest.mockResolvedValue({ subscriptionId: 'sub_new' })
+
+    const trigger = new FormbaseTrigger()
+    await trigger.webhookMethods.default.create.call(ctx as never)
+
+    expect(mockedRequest.mock.calls[0][1]).not.toHaveProperty('idleWindow')
   })
 })
 
@@ -409,24 +479,27 @@ describe('FormbaseTrigger.webhookMethods.default.delete', () => {
 })
 
 describe('FormbaseTrigger.webhook', () => {
-  it('emits a valid signed webhook body as one n8n item', async () => {
-    const body = { eventId: 'e1', eventType: 'SUBMIT_RESPONSE' }
-    const secret = `whsec_${'a'.repeat(64)}`
-    const rawBody = JSON.stringify(body)
-    const timestamp = Math.floor(Date.now() / 1000)
-    const ctx = makeWebhookContext({
-      body,
-      secret,
-      rawBody,
-      signatureHeader: signWebhookBody(secret, timestamp, rawBody),
-    })
+  it.each(['SUBMIT_RESPONSE', 'UPDATE_RESPONSE', 'ABANDON_RESPONSE'])(
+    'emits a valid signed %s webhook body as one n8n item',
+    async (eventType) => {
+      const body = { eventId: 'e1', eventType }
+      const secret = `whsec_${'a'.repeat(64)}`
+      const rawBody = JSON.stringify(body)
+      const timestamp = Math.floor(Date.now() / 1000)
+      const ctx = makeWebhookContext({
+        body,
+        secret,
+        rawBody,
+        signatureHeader: signWebhookBody(secret, timestamp, rawBody),
+      })
 
-    const trigger = new FormbaseTrigger()
-    const result = await trigger.webhook.call(ctx as never)
+      const trigger = new FormbaseTrigger()
+      const result = await trigger.webhook.call(ctx as never)
 
-    expect(result.workflowData).toEqual([[{ json: body }]])
-    expect(ctx._response.status).not.toHaveBeenCalled()
-  })
+      expect(result.workflowData).toEqual([[{ json: body }]])
+      expect(ctx._response.status).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     ['missing signature', undefined, undefined],

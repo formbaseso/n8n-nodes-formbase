@@ -5,7 +5,7 @@ Community node for [n8n](https://n8n.io) that starts workflows when a [formbase]
 ## Features
 
 - Trigger on completed submissions.
-- Trigger on abandoned submissions when partial submission tracking is enabled.
+- Trigger on abandoned submissions after a selected 12-hour, 1-day, 3-day, or 1-week idle window.
 - Load forms dynamically from every workspace available to the credential.
 - Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.
 - Verify every webhook with HMAC-SHA256 and reject stale or forged requests.
@@ -37,7 +37,7 @@ Self-hosted n8n must use configured HTTPS public URL for OAuth callback. Loopbac
 ## Use trigger
 
 1. Add **formbase Trigger** to a workflow.
-2. Select form and event.
+2. Select form and event. For an abandoned-submission event, select how long the response must remain unchanged.
 3. For a test execution, select **Listen for Test Event**, then submit the selected form.
 4. Activate the workflow. n8n registers its production webhook with formbase and removes it when the workflow is deactivated or deleted.
 
@@ -45,9 +45,11 @@ n8n webhook URL must be publicly reachable over HTTPS. For reverse-proxy or tunn
 
 n8n generates a separate 256-bit signing secret for each registration. Incoming requests must contain a valid `X-formbase-Signature` header with a timestamp no more than five minutes old. Missing, stale, or invalid signatures receive `401 Unauthorized` and do not start the workflow.
 
+Abandoned-submission timing is enforced by formbase, not n8n. formbase checks incomplete responses hourly and calls the registered n8n webhook after the selected idle window, so delivery can occur up to about one hour after the threshold.
+
 ## Example workflow
 
-Import [`examples/formbase-submission.json`](examples/formbase-submission.json), connect formbase credential, select form, then activate workflow. Example maps event ID, submission ID, respondent email, and form name into stable output fields.
+Import [`examples/formbase-submission.json`](examples/formbase-submission.json), connect formbase credential, select form, then activate workflow. Example maps event ID, event type, submission ID, respondent email, and form name into stable output fields.
 
 ## Output
 
@@ -83,7 +85,15 @@ Each webhook produces one n8n item containing formbase payload:
 }
 ```
 
-`eventType` is `SUBMIT_RESPONSE` for a new completed or abandoned response and `UPDATE_RESPONSE` when an existing response changes. Use `eventId` to deduplicate retries.
+Delivered payloads use these `eventType` values:
+
+| `eventType`        | Meaning                                                    |
+| ------------------ | ---------------------------------------------------------- |
+| `SUBMIT_RESPONSE`  | A respondent completed a new response.                     |
+| `UPDATE_RESPONSE`  | An existing completed response changed.                    |
+| `ABANDON_RESPONSE` | An incomplete response reached the configured idle window. |
+
+Webhook registration events (`submission_created` and `submission_abandoned`) select which deliveries trigger the workflow. Payload `eventType` identifies what happened to the response. Use `eventId` to deduplicate retries.
 
 Full contracts: [formbase API methods](https://docs.formbase.so/developers/rest-api) and [webhook reference](https://docs.formbase.so/developers/webhooks-reference).
 

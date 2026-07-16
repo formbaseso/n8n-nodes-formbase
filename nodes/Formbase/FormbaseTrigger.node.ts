@@ -10,7 +10,14 @@ import type {
 } from 'n8n-workflow'
 import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow'
 
-import { FORMBASE_OAUTH2_CREDENTIAL_NAME, FORMBASE_WEBHOOK_EVENTS, type FormbaseWebhookEvent } from './constants'
+import {
+  FORMBASE_IDLE_WINDOW_OPTIONS,
+  FORMBASE_OAUTH2_CREDENTIAL_NAME,
+  FORMBASE_WEBHOOK_EVENTS,
+  isFormbaseIdleWindow,
+  type FormbaseIdleWindow,
+  type FormbaseWebhookEvent,
+} from './constants'
 import { createFormbaseWebhookSecret, verifyFormbaseWebhookSignature } from './FormbaseWebhookSignature'
 import { formbaseApiRequest } from './GenericFunctions'
 
@@ -36,6 +43,7 @@ interface WebhookSubscription {
   targetUrl: string
   provider: string
   eventType: FormbaseWebhookEvent
+  idleWindow?: FormbaseIdleWindow
 }
 
 interface WebhookCreateResponse {
@@ -69,12 +77,39 @@ async function listWorkspaceForms(context: ILoadOptionsFunctions, workspace: Wor
 function findWebhookSubscription(
   subscriptions: WebhookSubscription[],
   targetUrl: string,
-  eventType: FormbaseWebhookEvent
+  eventType: FormbaseWebhookEvent,
+  idleWindow: FormbaseIdleWindow | undefined
 ): WebhookSubscription | undefined {
   return subscriptions.find(
     (subscription) =>
+      subscription.targetUrl === targetUrl &&
+      subscription.provider === 'n8n' &&
+      subscription.eventType === eventType &&
+      subscription.idleWindow === idleWindow
+  )
+}
+
+function findWebhookSubscriptionsByIdentity(
+  subscriptions: WebhookSubscription[],
+  targetUrl: string,
+  eventType: FormbaseWebhookEvent
+): WebhookSubscription[] {
+  return subscriptions.filter(
+    (subscription) =>
       subscription.targetUrl === targetUrl && subscription.provider === 'n8n' && subscription.eventType === eventType
   )
+}
+
+function getIdleWindow(context: IHookFunctions, eventType: FormbaseWebhookEvent): FormbaseIdleWindow | undefined {
+  if (eventType === FORMBASE_WEBHOOK_EVENTS.submissionCreated) return undefined
+
+  const idleWindow = context.getNodeParameter('idleWindow')
+  if (!isFormbaseIdleWindow(idleWindow)) {
+    throw new NodeApiError(context.getNode(), {
+      message: `Idle window must be one of: ${FORMBASE_IDLE_WINDOW_OPTIONS.map((option) => option.value).join(', ')}`,
+    })
+  }
+  return idleWindow
 }
 
 function clearWebhookRegistration(webhookData: IDataObject): void {
@@ -156,6 +191,21 @@ export class FormbaseTrigger implements INodeType {
         default: 'submission_created',
         description: 'Event to subscribe to. Abandoned submissions require partial submission tracking.',
       },
+      {
+        displayName: 'Consider Abandoned After',
+        name: 'idleWindow',
+        type: 'options',
+        displayOptions: {
+          show: {
+            event: [FORMBASE_WEBHOOK_EVENTS.submissionAbandoned],
+          },
+        },
+        options: [...FORMBASE_IDLE_WINDOW_OPTIONS],
+        default: '12h',
+        required: true,
+        description:
+          'Runs after the response has no saved changes for this long. The hourly sweep can add up to about one hour.',
+      },
     ],
   }
 
@@ -189,13 +239,22 @@ export class FormbaseTrigger implements INodeType {
         const formId = this.getNodeParameter('formId') as string
         if (!formId) return false
         const eventType = this.getNodeParameter('event') as FormbaseWebhookEvent
+        const idleWindow = getIdleWindow(this, eventType)
 
         const webhookData = this.getWorkflowStaticData('node')
         const result = (await formbaseApiRequest.call(this, 'webhooks.list', {
           formId,
         })) as ListResponse<WebhookSubscription>
 
-        const match = findWebhookSubscription(result.items, webhookUrl, eventType)
+        const match = findWebhookSubscription(result.items, webhookUrl, eventType, idleWindow)
+        const staleMatches = findWebhookSubscriptionsByIdentity(result.items, webhookUrl, eventType).filter(
+          (subscription) => subscription.subscriptionId !== match?.subscriptionId
+        )
+        for (const staleMatch of staleMatches) {
+          await formbaseApiRequest.call(this, 'webhooks.delete', {
+            subscriptionId: staleMatch.subscriptionId,
+          })
+        }
         if (!match) {
           clearWebhookRegistration(webhookData)
           return false
@@ -219,6 +278,7 @@ export class FormbaseTrigger implements INodeType {
         if (!webhookUrl) return false
         const formId = this.getNodeParameter('formId') as string
         const eventType = this.getNodeParameter('event') as FormbaseWebhookEvent
+        const idleWindow = getIdleWindow(this, eventType)
         const webhookSecret = createFormbaseWebhookSecret()
 
         const created = (await formbaseApiRequest.call(this, 'webhooks.create', {
@@ -226,6 +286,7 @@ export class FormbaseTrigger implements INodeType {
           targetUrl: webhookUrl,
           provider: 'n8n',
           eventType,
+          ...(idleWindow !== undefined ? { idleWindow } : {}),
           signingSecret: webhookSecret,
         })) as WebhookCreateResponse
 

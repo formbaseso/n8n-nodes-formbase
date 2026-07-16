@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented here.
 
+## 0.4.0 - 2026-07-16
+
+- Require and persist a selectable idle window for abandoned-submission registrations.
+- Surface abandoned deliveries as `ABANDON_RESPONSE` instead of `SUBMIT_RESPONSE`.
+
 ## 0.3.0 - 2026-07-15
 
 - Sign webhook registrations and reject missing, invalid, or stale delivery signatures.

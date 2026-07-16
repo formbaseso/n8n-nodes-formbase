@@ -23,6 +23,12 @@
               "type": "string"
             },
             {
+              "id": "9da94c68-fcf8-4f79-b78e-5bb78c043aec",
+              "name": "eventType",
+              "value": "={{ $json.eventType }}",
+              "type": "string"
+            },
+            {
               "id": "b27b42be-fc5d-491f-a93b-02a7fa4e63f8",
               "name": "submissionId",
               "value": "={{ $json.submission.id }}",
