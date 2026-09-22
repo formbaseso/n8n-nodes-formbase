@@ -19,31 +19,31 @@
             {
               "id": "cdcb57d7-377e-45e2-8da9-63e52f4690b4",
               "name": "eventId",
-              "value": "={{ $json.eventId }}",
+              "value": "={{ $json.id }}",
               "type": "string"
             },
             {
               "id": "9da94c68-fcf8-4f79-b78e-5bb78c043aec",
               "name": "eventType",
-              "value": "={{ $json.eventType }}",
+              "value": "={{ $json.type }}",
               "type": "string"
             },
             {
               "id": "b27b42be-fc5d-491f-a93b-02a7fa4e63f8",
               "name": "submissionId",
-              "value": "={{ $json.submission.id }}",
+              "value": "={{ $json.data.submission.id }}",
               "type": "string"
             },
             {
               "id": "2b171786-cb32-4e73-96e5-d60f39060fe1",
               "name": "respondentEmail",
-              "value": "={{ $json.submission.respondentEmail }}",
+              "value": "={{ $json.data.submission.respondentEmail }}",
               "type": "string"
             },
             {
               "id": "a6366cdf-c3b9-4bdc-be3c-723d2bfab7a4",
               "name": "formName",
-              "value": "={{ $json.form.name }}",
+              "value": "={{ $json.data.form.name }}",
               "type": "string"
             }
           ]

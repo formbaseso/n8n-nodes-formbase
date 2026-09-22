@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented here.
 
+## 0.5.0 - 2026-09-22
+
+- Read the formbase event envelope (`id`, `type`, `createdAt`, `apiVersion`, `test`, `data`) that replaced the flat payload. `fields[]` is gone: every answer arrives once in `data.answers` keyed by field key, with the readable text in `data.display`. Event types are `submission.completed`, `submission.updated` and `submission.abandoned`; the PDF link is `data.submission.pdfUrl`.
+- The example workflow maps the new paths.
+
 ## 0.4.1 - 2026-07-16
 
 - Allow n8n OAuth credentials to refresh expired access tokens automatically.

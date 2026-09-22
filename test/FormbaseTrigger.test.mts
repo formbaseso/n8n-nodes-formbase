@@ -164,7 +164,7 @@ describe('formbase Trigger description', () => {
       'n8n-nodes-base.set',
     ])
     expect(workflow.nodes[1]?.parameters?.assignments?.assignments).toContainEqual(
-      expect.objectContaining({ name: 'eventType', value: '={{ $json.eventType }}' })
+      expect.objectContaining({ name: 'eventType', value: '={{ $json.type }}' })
     )
   })
 })

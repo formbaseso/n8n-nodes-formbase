@@ -53,47 +53,41 @@ Import [`examples/formbase-submission.json`](examples/formbase-submission.json),
 
 ## Output
 
-Each webhook produces one n8n item containing formbase payload:
+Each webhook produces one n8n item containing the formbase event envelope. Every answer appears once in `data.answers`, keyed by field key; `data.display` carries the human-readable text under the same keys:
 
 ```json
 {
-  "eventId": "evt_abc123",
-  "eventType": "SUBMIT_RESPONSE",
-  "eventTimestamp": "2026-04-25T12:34:56.000Z",
-  "form": {
-    "id": "frm_abc123",
-    "name": "Customer Feedback"
-  },
-  "submission": {
-    "id": "sub_xyz789",
-    "respondentEmail": "respondent@example.com",
-    "submittedAt": "2026-04-25T12:34:56.000Z",
-    "submissionPdfLink": "https://api.formbase.so/api/storage/...",
-    "language": "en"
-  },
-  "fields": [
-    {
-      "fieldId": "fld_rating",
-      "title": "How likely are you to recommend us?",
-      "type": "rating",
-      "value": {
-        "raw": 9,
-        "display": "9"
-      }
-    }
-  ]
+  "id": "evt_abc123",
+  "type": "submission.completed",
+  "createdAt": "2026-04-25T12:34:56.000Z",
+  "apiVersion": "2026-09-22",
+  "test": false,
+  "data": {
+    "form": { "id": "frm_abc123", "name": "Customer Feedback", "snapshotId": "snp_..." },
+    "submission": {
+      "id": "sub_xyz789",
+      "respondentEmail": "respondent@example.com",
+      "submittedAt": "2026-04-25T12:34:56.000Z",
+      "pdfUrl": null,
+      "language": "en"
+    },
+    "answers": { "recommend": 9, "plan": "opt_x8f2" },
+    "display": { "recommend": "9", "plan": "Pro" }
+  }
 }
 ```
 
-Delivered payloads use these `eventType` values:
+Read a value with `{{ $json.data.answers.recommend }}`; the field keys come from `fields.list` (or the form's field Configure menu). A repeating group is an array of row objects in `answers` and one joined line in `display`.
 
-| `eventType`        | Meaning                                                    |
-| ------------------ | ---------------------------------------------------------- |
-| `SUBMIT_RESPONSE`  | A respondent completed a new response.                     |
-| `UPDATE_RESPONSE`  | An existing completed response changed.                    |
-| `ABANDON_RESPONSE` | An incomplete response reached the configured idle window. |
+Delivered events use these `type` values:
 
-Webhook registration events (`submission_created` and `submission_abandoned`) select which deliveries trigger the workflow. Payload `eventType` identifies what happened to the response. Use `eventId` to deduplicate retries.
+| `type`                  | Meaning                                                    |
+| ----------------------- | ---------------------------------------------------------- |
+| `submission.completed`  | A respondent completed a new response.                     |
+| `submission.updated`    | An existing completed response changed.                    |
+| `submission.abandoned`  | An incomplete response reached the configured idle window. |
+
+Webhook registration events (`submission_created` and `submission_abandoned`) select which deliveries trigger the workflow. The event `type` identifies what happened to the response. Use `id` to deduplicate retries; the same values arrive as `X-formbase-Event-Id` and `X-formbase-Event-Type` headers.
 
 Full contracts: [formbase API methods](https://docs.formbase.so/developers/rest-api) and [webhook reference](https://docs.formbase.so/developers/webhooks-reference).
 
