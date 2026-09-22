@@ -163,9 +163,15 @@ describe('formbase Trigger description', () => {
       'n8n-nodes-formbase.formbaseTrigger',
       'n8n-nodes-base.set',
     ])
-    expect(workflow.nodes[1]?.parameters?.assignments?.assignments).toContainEqual(
-      expect.objectContaining({ name: 'eventType', value: '={{ $json.type }}' })
+    const assignments = workflow.nodes[1]?.parameters?.assignments?.assignments ?? []
+    expect(assignments).toContainEqual(expect.objectContaining({ name: 'eventId', value: '={{ $json.id }}' }))
+    expect(assignments).toContainEqual(expect.objectContaining({ name: 'eventType', value: '={{ $json.type }}' }))
+    expect(assignments).toContainEqual(
+      expect.objectContaining({ name: 'submissionId', value: '={{ $json.data.submission.id }}' })
     )
+    for (const assignment of assignments) {
+      expect(assignment.value).not.toContain('$json.fields')
+    }
   })
 })
 
@@ -478,11 +484,33 @@ describe('FormbaseTrigger.webhookMethods.default.delete', () => {
   })
 })
 
+function makeEventBody(type: string): Record<string, unknown> {
+  return {
+    id: 'evt_abc123',
+    type,
+    createdAt: '2026-09-22T12:34:56.000Z',
+    apiVersion: '2026-09-22',
+    test: false,
+    data: {
+      form: { id: 'frm_abc123', name: 'Customer Feedback', snapshotId: 'snp_1' },
+      submission: {
+        id: 'sub_xyz789',
+        respondentEmail: 'respondent@example.com',
+        submittedAt: '2026-09-22T12:34:56.000Z',
+        pdfUrl: '/api/storage/receipt-key',
+        language: 'en',
+      },
+      answers: { recommend: 9, plan: 'pro', contacts: [{ name: 'Ada' }] },
+      display: { recommend: '9', plan: 'Pro', contacts: 'Ada' },
+    },
+  }
+}
+
 describe('FormbaseTrigger.webhook', () => {
-  it.each(['SUBMIT_RESPONSE', 'UPDATE_RESPONSE', 'ABANDON_RESPONSE'])(
+  it.each(['submission.completed', 'submission.updated', 'submission.abandoned'])(
     'emits a valid signed %s webhook body as one n8n item',
-    async (eventType) => {
-      const body = { eventId: 'e1', eventType }
+    async (type) => {
+      const body = makeEventBody(type)
       const secret = `whsec_${'a'.repeat(64)}`
       const rawBody = JSON.stringify(body)
       const timestamp = Math.floor(Date.now() / 1000)
@@ -501,12 +529,40 @@ describe('FormbaseTrigger.webhook', () => {
     }
   )
 
+  it('passes the envelope through untouched so answers stay under their field keys', async () => {
+    const body = makeEventBody('submission.completed')
+    body.data = { ...(body.data as Record<string, unknown>), request: { id: 'req_1', externalId: 'ext_9' } }
+    const secret = `whsec_${'a'.repeat(64)}`
+    const rawBody = JSON.stringify(body)
+    const timestamp = Math.floor(Date.now() / 1000)
+    const ctx = makeWebhookContext({
+      body,
+      secret,
+      rawBody,
+      signatureHeader: signWebhookBody(secret, timestamp, rawBody),
+    })
+
+    const trigger = new FormbaseTrigger()
+    const result = await trigger.webhook.call(ctx as never)
+    const item = result.workflowData?.[0]?.[0]?.json as Record<string, unknown>
+    const data = item.data as Record<string, unknown>
+
+    expect(item.id).toBe('evt_abc123')
+    expect(item.type).toBe('submission.completed')
+    expect(item.test).toBe(false)
+    expect(data.answers).toEqual({ recommend: 9, plan: 'pro', contacts: [{ name: 'Ada' }] })
+    expect(data.display).toEqual({ recommend: '9', plan: 'Pro', contacts: 'Ada' })
+    expect((data.submission as Record<string, unknown>).pdfUrl).toBe('/api/storage/receipt-key')
+    expect(data.request).toEqual({ id: 'req_1', externalId: 'ext_9' })
+    expect(item).not.toHaveProperty('fields')
+  })
+
   it.each([
     ['missing signature', undefined, undefined],
     ['invalid signature', `t=${Math.floor(Date.now() / 1000)},sha256=${'0'.repeat(64)}`, undefined],
     ['missing raw body', 'valid', false],
   ] as const)('rejects %s', async (_name, signatureHeader, rawBody) => {
-    const body = { eventId: 'e1', eventType: 'SUBMIT_RESPONSE' }
+    const body = makeEventBody('submission.completed')
     const secret = `whsec_${'a'.repeat(64)}`
     const serializedBody = JSON.stringify(body)
     const timestamp = Math.floor(Date.now() / 1000)
@@ -524,7 +580,7 @@ describe('FormbaseTrigger.webhook', () => {
   })
 
   it('rejects a valid signature outside the five-minute replay window', async () => {
-    const body = { eventId: 'e1', eventType: 'SUBMIT_RESPONSE' }
+    const body = makeEventBody('submission.completed')
     const secret = `whsec_${'a'.repeat(64)}`
     const rawBody = JSON.stringify(body)
     const timestamp = Math.floor(Date.now() / 1000) - 301

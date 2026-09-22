@@ -71,13 +71,17 @@ Each webhook produces one n8n item containing the formbase event envelope. Every
       "pdfUrl": null,
       "language": "en"
     },
-    "answers": { "recommend": 9, "plan": "opt_x8f2" },
+    "answers": { "recommend": 9, "plan": "pro" },
     "display": { "recommend": "9", "plan": "Pro" }
   }
 }
 ```
 
-Read a value with `{{ $json.data.answers.recommend }}`; the field keys come from `fields.list` (or the form's field Configure menu). A repeating group is an array of row objects in `answers` and one joined line in `display`.
+Read a value with `{{ $json.data.answers.recommend }}`; the field keys come from `fields.list` (or the form's field Configure menu). A choice answer holds the readable option key (`"pro"`), and `display` holds its label (`"Pro"`). A repeating group is an array of row objects in `answers` and one joined line in `display`.
+
+The node passes the envelope through unchanged — it does not flatten answers into the top level of the item. Nothing is dropped, every key stays where the formbase contract puts it, and a field key can never collide with an envelope key such as `type` or `test`. Map the handful of values a workflow needs with a Set node, as the example workflow does.
+
+A submission that answered a request also carries `data.request` (`id`, and the caller's `externalId` and `metadata` when they were supplied). A response saved to PDF carries `data.submission.pdfUrl`; it is `null` when no PDF is kept. `test` is `true` for a test delivery, so a workflow can branch on it.
 
 Delivered events use these `type` values:
 
