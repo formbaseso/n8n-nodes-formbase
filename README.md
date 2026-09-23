@@ -191,6 +191,16 @@ npm run lint
 
 `npm test` runs unit tests plus lifecycle tests that drive both nodes against an in-process formbase API over real HTTP (`test/fakeFormbase.mts`). `npm run dev` starts n8n with the node loaded and rebuilds on changes. Compiled package files are written to `dist/`. Run `npm pack --dry-run` before publishing to inspect package contents.
 
+## Release
+
+The Publish workflow is the only way a version reaches npm. It publishes with provenance through npm trusted publishing when a `v*.*.*` tag is pushed.
+
+1. Bump `version` in `package.json` and `package-lock.json` and add a `CHANGELOG.md` entry.
+2. Commit and push `main`.
+3. Tag the commit with the same version and push the tag: `git tag v0.9.0 && git push origin v0.9.0`.
+
+Do not run `npm publish` or `npm stage publish` by hand. npm keeps one version slot per version, so a hand-published or staged version makes the tag's publish fail with E409 "Cannot publish over previously staged version". The workflow fails if the tag does not match `package.json`, and skips publishing when the version is already on npm.
+
 ## License
 
 MIT
