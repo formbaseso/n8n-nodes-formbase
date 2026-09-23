@@ -8,6 +8,9 @@ All notable changes to this project will be documented here.
 - Pass the envelope to the workflow unchanged instead of flattening answers into the item. A field key can therefore never collide with `id`, `type` or `test`, and `{{ $json.data.answers.<field_key> }}` reads the same path the formbase contract documents.
 - Carry `data.request` through for a submission that answered a request, and `test` for a test delivery.
 - The example workflow maps the new paths.
+- Register exactly one subscription per node: activation keeps the subscription it registered last and removes any other n8n subscription for the same webhook URL and event, so a second, unverifiable delivery path never stays open.
+- List forms from the workspace the credential is scoped to, across every `forms.list` page, instead of fanning out over workspaces.
+- Offer the default event first and idle windows shortest first.
 
 ## 0.4.1 - 2026-07-16
 

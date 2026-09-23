@@ -28,7 +28,7 @@ describe('formbaseApiRequest', () => {
       data: { id: 'u1', email: 'a@b.com', name: 'Ada' },
     })
 
-    const result = await formbaseApiRequest.call(ctx as never, 'me.get')
+    const result = await formbaseApiRequest(ctx as never, 'me.get')
 
     expect(result).toEqual({ id: 'u1', email: 'a@b.com', name: 'Ada' })
     expect(httpRequestWithAuthentication).toHaveBeenCalledTimes(1)
@@ -40,6 +40,8 @@ describe('formbaseApiRequest', () => {
       body: { method: 'me.get', params: {} },
       json: true,
     })
+    // Non-2xx statuses must keep throwing inside n8n's helper: that is what
+    // triggers the OAuth refresh on a 401.
     expect(options).not.toHaveProperty('ignoreHttpStatusErrors')
   })
 
@@ -49,18 +51,18 @@ describe('formbaseApiRequest', () => {
       { serverUrl: 'https://example.convex.site/api/v1///' }
     )
 
-    await formbaseApiRequest.call(ctx as never, 'me.get')
+    await formbaseApiRequest(ctx as never, 'me.get')
 
     expect(httpRequestWithAuthentication.mock.calls[0][1].url).toBe('https://example.convex.site/api/v1')
   })
 
-  it('maps API error envelopes to NodeApiError', async () => {
+  it('maps an error envelope to a NodeApiError with the matching HTTP code', async () => {
     const { ctx } = makeContext({
       ok: false,
       error: { code: 'UNAUTHORIZED', message: 'Bad API token' },
     })
 
-    await expect(formbaseApiRequest.call(ctx as never, 'me.get')).rejects.toMatchObject({
+    await expect(formbaseApiRequest(ctx as never, 'me.get')).rejects.toMatchObject({
       message: expect.stringContaining('UNAUTHORIZED'),
       httpCode: '401',
     })
@@ -72,7 +74,7 @@ describe('formbaseApiRequest', () => {
       error: { code: 'METHOD_NOT_FOUND', message: 'Unknown method: bogus.method' },
     })
 
-    await expect(formbaseApiRequest.call(ctx as never, 'bogus.method')).rejects.toMatchObject({
+    await expect(formbaseApiRequest(ctx as never, 'bogus.method')).rejects.toMatchObject({
       message: expect.stringContaining('METHOD_NOT_FOUND'),
       httpCode: '404',
     })
@@ -81,13 +83,13 @@ describe('formbaseApiRequest', () => {
   it('rejects malformed API responses', async () => {
     const { ctx } = makeContext({ success: true })
 
-    await expect(formbaseApiRequest.call(ctx as never, 'me.get')).rejects.toBeInstanceOf(NodeApiError)
+    await expect(formbaseApiRequest(ctx as never, 'me.get')).rejects.toBeInstanceOf(NodeApiError)
   })
 
   it('forwards params unchanged', async () => {
     const { ctx, httpRequestWithAuthentication } = makeContext({ ok: true, data: [] })
 
-    await formbaseApiRequest.call(ctx as never, 'forms.list', { workspaceId: 'w1', limit: 100 })
+    await formbaseApiRequest(ctx as never, 'forms.list', { workspaceId: 'w1', limit: 100 })
 
     expect(httpRequestWithAuthentication.mock.calls[0][1].body).toEqual({
       method: 'forms.list',

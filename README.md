@@ -6,7 +6,7 @@ Community node for [n8n](https://n8n.io) that starts workflows when a [formbase]
 
 - Trigger on completed submissions.
 - Trigger on abandoned submissions after a selected 12-hour, 1-day, 3-day, or 1-week idle window.
-- Load forms dynamically from every workspace available to the credential.
+- Load forms dynamically from the workspace the credential is scoped to, across every page.
 - Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.
 - Verify every webhook with HMAC-SHA256 and reject stale or forged requests.
 - Connect through workspace-scoped OAuth 2.1 with PKCE and automatic refresh-token rotation.
@@ -104,7 +104,7 @@ npm run build
 npm run lint
 ```
 
-`npm run dev` starts n8n with the node loaded and rebuilds on changes. Compiled package files are written to `dist/`. Run `npm pack --dry-run` before publishing to inspect package contents.
+`npm test` runs unit tests plus a lifecycle test that drives the node against an in-process formbase API over real HTTP (`test/fakeFormbase.mts`). `npm run dev` starts n8n with the node loaded and rebuilds on changes. Compiled package files are written to `dist/`. Run `npm pack --dry-run` before publishing to inspect package contents.
 
 ## License
 

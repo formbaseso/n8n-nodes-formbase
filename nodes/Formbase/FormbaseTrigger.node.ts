@@ -8,7 +8,7 @@ import type {
   IWebhookFunctions,
   IWebhookResponseData,
 } from 'n8n-workflow'
-import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow'
+import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow'
 
 import {
   FORMBASE_IDLE_WINDOW_OPTIONS,
@@ -24,7 +24,6 @@ import { formbaseApiRequest } from './GenericFunctions'
 interface FormSummary {
   id: string
   name: string
-  workspaceId: string
 }
 
 interface WorkspaceSummary {
@@ -38,6 +37,7 @@ interface ListResponse<T> {
   nextCursor?: string | null
 }
 
+/** One row of `webhooks.list`. */
 interface WebhookSubscription {
   subscriptionId: string
   targetUrl: string
@@ -46,70 +46,75 @@ interface WebhookSubscription {
   idleWindow?: FormbaseIdleWindow
 }
 
-interface WebhookCreateResponse {
-  subscriptionId: string
+/** What this node wants registered with formbase, read from its parameters. */
+interface Registration {
+  webhookUrl: string
+  formId: string
+  eventType: FormbaseWebhookEvent
+  idleWindow?: FormbaseIdleWindow
 }
 
 const FORMS_PAGE_SIZE = 100
 
-async function listWorkspaceForms(context: ILoadOptionsFunctions, workspace: WorkspaceSummary): Promise<FormSummary[]> {
+/**
+ * Every form of the connected workspace. A formbase OAuth token is scoped to
+ * the one workspace the user picked on the consent screen, so `workspaces.list`
+ * answers with exactly that workspace.
+ */
+async function listForms(context: ILoadOptionsFunctions): Promise<FormSummary[]> {
+  const workspaces = await formbaseApiRequest<ListResponse<WorkspaceSummary>>(context, 'workspaces.list')
+  const workspace = workspaces.items[0]
+  if (!workspace) {
+    throw new NodeOperationError(context.getNode(), 'This formbase credential has no workspace. Reconnect it and pick one.')
+  }
+
   const forms: FormSummary[] = []
   let cursor: string | undefined
-
   do {
-    const result = (await formbaseApiRequest.call(context, 'forms.list', {
+    const page = await formbaseApiRequest<ListResponse<FormSummary>>(context, 'forms.list', {
       workspaceId: workspace.id,
       limit: FORMS_PAGE_SIZE,
       ...(cursor ? { cursor } : {}),
-    })) as ListResponse<FormSummary>
-
-    forms.push(...result.items)
-    if (!result.hasMore) break
-    if (!result.nextCursor) {
+    })
+    forms.push(...page.items)
+    if (page.hasMore && !page.nextCursor) {
       throw new NodeApiError(context.getNode(), { message: 'formbase returned an incomplete forms page' })
     }
-    cursor = result.nextCursor
+    cursor = page.hasMore ? (page.nextCursor ?? undefined) : undefined
   } while (cursor)
 
   return forms
 }
 
-function findWebhookSubscription(
-  subscriptions: WebhookSubscription[],
-  targetUrl: string,
-  eventType: FormbaseWebhookEvent,
-  idleWindow: FormbaseIdleWindow | undefined
-): WebhookSubscription | undefined {
-  return subscriptions.find(
-    (subscription) =>
-      subscription.targetUrl === targetUrl &&
-      subscription.provider === 'n8n' &&
-      subscription.eventType === eventType &&
-      subscription.idleWindow === idleWindow
-  )
-}
+/** The registration the node's parameters describe, or null while the node is not configured. */
+function readRegistration(context: IHookFunctions): Registration | null {
+  const webhookUrl = context.getNodeWebhookUrl('default')
+  const formId = context.getNodeParameter('formId') as string
+  if (!webhookUrl || !formId) return null
 
-function findWebhookSubscriptionsByIdentity(
-  subscriptions: WebhookSubscription[],
-  targetUrl: string,
-  eventType: FormbaseWebhookEvent
-): WebhookSubscription[] {
-  return subscriptions.filter(
-    (subscription) =>
-      subscription.targetUrl === targetUrl && subscription.provider === 'n8n' && subscription.eventType === eventType
-  )
-}
-
-function getIdleWindow(context: IHookFunctions, eventType: FormbaseWebhookEvent): FormbaseIdleWindow | undefined {
-  if (eventType === FORMBASE_WEBHOOK_EVENTS.submissionCreated) return undefined
+  const eventType = context.getNodeParameter('event') as FormbaseWebhookEvent
+  if (eventType !== FORMBASE_WEBHOOK_EVENTS.submissionAbandoned) return { webhookUrl, formId, eventType }
 
   const idleWindow = context.getNodeParameter('idleWindow')
   if (!isFormbaseIdleWindow(idleWindow)) {
-    throw new NodeApiError(context.getNode(), {
-      message: `Idle window must be one of: ${FORMBASE_IDLE_WINDOW_OPTIONS.map((option) => option.value).join(', ')}`,
-    })
+    const allowed = FORMBASE_IDLE_WINDOW_OPTIONS.map((option) => option.value).join(', ')
+    throw new NodeOperationError(context.getNode(), `Idle window must be one of: ${allowed}`)
   }
-  return idleWindow
+  return { webhookUrl, formId, eventType, idleWindow }
+}
+
+/** A subscription this node's URL and event own, whatever its idle window or secret. */
+function isOwnSubscription(subscription: WebhookSubscription, registration: Registration): boolean {
+  if (subscription.provider !== 'n8n') return false
+  if (subscription.targetUrl !== registration.webhookUrl) return false
+  return subscription.eventType === registration.eventType
+}
+
+/** The subscription this node registered last, still verifiable and still describing the same event. */
+function isCurrentRegistration(subscription: WebhookSubscription, registration: Registration, webhookData: IDataObject): boolean {
+  if (subscription.subscriptionId !== webhookData.subscriptionId) return false
+  if (typeof webhookData.webhookSecret !== 'string') return false
+  return subscription.idleWindow === registration.idleWindow
 }
 
 function clearWebhookRegistration(webhookData: IDataObject): void {
@@ -173,19 +178,21 @@ export class FormbaseTrigger implements INodeType {
         displayName: 'Event',
         name: 'event',
         type: 'options',
+        // eslint-disable-next-line @n8n/community-nodes/options-sorted-alphabetically -- The default comes first.
         options: [
+          {
+            name: 'Submission Created',
+            value: FORMBASE_WEBHOOK_EVENTS.submissionCreated,
+            action: 'On submission created',
+            description:
+              'Runs when a respondent submits the selected form, and again when a completed submission is edited (event type submission.updated)',
+          },
           {
             name: 'Submission Abandoned',
             value: FORMBASE_WEBHOOK_EVENTS.submissionAbandoned,
             action: 'On submission abandoned',
             description:
               'Runs when a respondent leaves the selected form before submitting it; requires partial submission tracking',
-          },
-          {
-            name: 'Submission Created',
-            value: FORMBASE_WEBHOOK_EVENTS.submissionCreated,
-            action: 'On submission created',
-            description: 'Runs when a respondent submits the selected form',
           },
         ],
         default: 'submission_created',
@@ -212,83 +219,56 @@ export class FormbaseTrigger implements INodeType {
   methods = {
     loadOptions: {
       async getForms(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
-        const workspaceResult = (await formbaseApiRequest.call(this, 'workspaces.list', {})) as ListResponse<WorkspaceSummary>
-        const formsByWorkspace = await Promise.all(
-          workspaceResult.items.map(async (workspace) => ({
-            workspace,
-            forms: await listWorkspaceForms(this, workspace),
-          }))
-        )
-        const showWorkspaceName = formsByWorkspace.length > 1
-
-        return formsByWorkspace.flatMap(({ workspace, forms }) =>
-          forms.map((form) => ({
-            name: showWorkspaceName ? `${workspace.name} / ${form.name}` : form.name,
-            value: form.id,
-          }))
-        )
+        const forms = await listForms(this)
+        return forms.map((form) => ({ name: form.name, value: form.id }))
       },
     },
   }
 
   webhookMethods = {
     default: {
+      /**
+       * True when formbase still holds the subscription this node registered.
+       * Any other subscription for this node's URL and event — one with no
+       * stored secret, a different idle window, or a stale duplicate — is
+       * removed rather than left as a second, unverifiable delivery path.
+       */
       async checkExists(this: IHookFunctions): Promise<boolean> {
-        const webhookUrl = this.getNodeWebhookUrl('default')
-        if (!webhookUrl) return false
-        const formId = this.getNodeParameter('formId') as string
-        if (!formId) return false
-        const eventType = this.getNodeParameter('event') as FormbaseWebhookEvent
-        const idleWindow = getIdleWindow(this, eventType)
+        const registration = readRegistration(this)
+        if (!registration) return false
 
         const webhookData = this.getWorkflowStaticData('node')
-        const result = (await formbaseApiRequest.call(this, 'webhooks.list', {
-          formId,
-        })) as ListResponse<WebhookSubscription>
-
-        const match = findWebhookSubscription(result.items, webhookUrl, eventType, idleWindow)
-        const staleMatches = findWebhookSubscriptionsByIdentity(result.items, webhookUrl, eventType).filter(
-          (subscription) => subscription.subscriptionId !== match?.subscriptionId
-        )
-        for (const staleMatch of staleMatches) {
-          await formbaseApiRequest.call(this, 'webhooks.delete', {
-            subscriptionId: staleMatch.subscriptionId,
-          })
-        }
-        if (!match) {
-          clearWebhookRegistration(webhookData)
-          return false
-        }
-
-        const registrationMatchesStaticData =
-          webhookData.subscriptionId === match.subscriptionId && typeof webhookData.webhookSecret === 'string'
-        if (registrationMatchesStaticData) return true
-
-        // Existing unsigned or stale registrations cannot be verified. Replace them
-        // during activation instead of leaving a second delivery path active.
-        await formbaseApiRequest.call(this, 'webhooks.delete', {
-          subscriptionId: match.subscriptionId,
+        const { items } = await formbaseApiRequest<ListResponse<WebhookSubscription>>(this, 'webhooks.list', {
+          formId: registration.formId,
         })
-        clearWebhookRegistration(webhookData)
-        return false
+
+        let current = false
+        for (const subscription of items) {
+          if (!isOwnSubscription(subscription, registration)) continue
+          if (isCurrentRegistration(subscription, registration, webhookData)) {
+            current = true
+            continue
+          }
+          await formbaseApiRequest(this, 'webhooks.delete', { subscriptionId: subscription.subscriptionId })
+        }
+
+        if (!current) clearWebhookRegistration(webhookData)
+        return current
       },
 
       async create(this: IHookFunctions): Promise<boolean> {
-        const webhookUrl = this.getNodeWebhookUrl('default')
-        if (!webhookUrl) return false
-        const formId = this.getNodeParameter('formId') as string
-        const eventType = this.getNodeParameter('event') as FormbaseWebhookEvent
-        const idleWindow = getIdleWindow(this, eventType)
-        const webhookSecret = createFormbaseWebhookSecret()
+        const registration = readRegistration(this)
+        if (!registration) return false
 
-        const created = (await formbaseApiRequest.call(this, 'webhooks.create', {
-          formId,
-          targetUrl: webhookUrl,
+        const webhookSecret = createFormbaseWebhookSecret()
+        const created = await formbaseApiRequest<{ subscriptionId: string }>(this, 'webhooks.create', {
+          formId: registration.formId,
+          targetUrl: registration.webhookUrl,
           provider: 'n8n',
-          eventType,
-          ...(idleWindow !== undefined ? { idleWindow } : {}),
+          eventType: registration.eventType,
+          ...(registration.idleWindow ? { idleWindow: registration.idleWindow } : {}),
           signingSecret: webhookSecret,
-        })) as WebhookCreateResponse
+        })
 
         const webhookData = this.getWorkflowStaticData('node')
         webhookData.subscriptionId = created.subscriptionId
@@ -305,13 +285,10 @@ export class FormbaseTrigger implements INodeType {
         }
 
         try {
-          await formbaseApiRequest.call(this, 'webhooks.delete', {
-            subscriptionId,
-          })
+          await formbaseApiRequest(this, 'webhooks.delete', { subscriptionId })
         } catch (error: unknown) {
-          if (!(error instanceof NodeApiError) || error.httpCode !== '404') {
-            return false
-          }
+          // Already gone on the formbase side is the outcome we wanted.
+          if (!(error instanceof NodeApiError) || error.httpCode !== '404') return false
         }
         clearWebhookRegistration(webhookData)
         return true
@@ -319,6 +296,7 @@ export class FormbaseTrigger implements INodeType {
     },
   }
 
+  /** One item per delivery: the formbase event envelope, untouched, once its signature checks out. */
   async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
     if (!verifyFormbaseWebhookSignature(this)) {
       this.getResponseObject().status(401).send('Unauthorized').end()
