@@ -34,7 +34,7 @@ OAuth setup requires n8n 2.30 or newer.
 
 n8n registers its exact callback URL with formbase automatically through OAuth Dynamic Client Registration. Access tokens expire after one hour and refresh automatically. Rotating refresh token remains valid while connection is used at least once every 30 days.
 
-Self-hosted n8n must use configured HTTPS public URL for OAuth callback. Loopback HTTP is supported for local development.
+Self-hosted n8n must use configured HTTPS public URL for OAuth callback. Loopback HTTP is supported for local development; see [Run locally against formbase](#run-locally-against-formbase).
 
 ## Use the formbase node
 
@@ -83,7 +83,7 @@ The Wait node cannot check the `X-formbase-Signature` header that the callback c
 3. For a test execution, select **Listen for Test Event**, then submit the selected form.
 4. Activate the workflow. n8n registers its production webhook with formbase and removes it when the workflow is deactivated or deleted.
 
-n8n webhook URL must be publicly reachable over HTTPS. For reverse-proxy or tunnel deployments, configure n8n's `WEBHOOK_URL` so generated webhook URLs use public origin.
+n8n webhook URL must be publicly reachable over HTTPS. For reverse-proxy or tunnel deployments, configure n8n's `WEBHOOK_URL` so generated webhook URLs use public origin. For a local n8n, see [Run locally against formbase](#run-locally-against-formbase).
 
 n8n generates a separate 256-bit signing secret for each registration. Incoming requests must contain a valid `X-formbase-Signature` header with a timestamp no more than five minutes old. Missing, stale, or invalid signatures receive `401 Unauthorized` and do not start the workflow.
 
@@ -190,6 +190,26 @@ npm run lint
 ```
 
 `npm test` runs unit tests plus lifecycle tests that drive both nodes against an in-process formbase API over real HTTP (`test/fakeFormbase.mts`). `npm run dev` starts n8n with the node loaded and rebuilds on changes. Compiled package files are written to `dist/`. Run `npm pack --dry-run` before publishing to inspect package contents.
+
+### Run locally against formbase
+
+The credential's server URL is a hidden field fixed to `https://api.formbase.so/api/v1` (`FORMBASE_API_RESOURCE_URL` in `nodes/Formbase/constants.ts`). A local build therefore always talks to production formbase: requests, webhook subscriptions and test submissions it creates are real data in the workspace you connect. Use a workspace meant for testing.
+
+`npm run dev` starts n8n on `http://localhost:5678`. That is enough to connect the credential, but formbase cannot reach `localhost`, so an activated **formbase Trigger** never runs and a **Wait for the Outcome** callback never arrives. Two n8n settings fix this:
+
+- `WEBHOOK_URL`: the public address n8n puts into the webhook and resume URLs it generates. The trigger sends its webhook URL to formbase when the workflow is activated (`webhooks.create`), and **Wait for the Outcome** sends `{{ $execution.resumeUrl }}` as the request's callback. Point it at a tunnel to `localhost:5678`, with a trailing `/`.
+- `N8N_EDITOR_BASE_URL`: the address n8n builds the OAuth callback URL from. When `WEBHOOK_URL` points at a tunnel and this is not set, the OAuth callback points at the tunnel too, and n8n answers it with "Unauthorized" because the browser's n8n login cookie belongs to `localhost`. Set it to `http://localhost:5678/`.
+
+```bash
+cloudflared tunnel --url http://localhost:5678   # prints https://<random>.trycloudflare.com
+
+# in a second terminal
+WEBHOOK_URL=https://<random>.trycloudflare.com/ \
+N8N_EDITOR_BASE_URL=http://localhost:5678/ \
+npm run dev
+```
+
+A quick tunnel gets a new address every time `cloudflared` restarts. After a restart, update `WEBHOOK_URL`, restart n8n, and deactivate and reactivate each workflow so the trigger registers its new webhook URL with formbase.
 
 ## Release
 
