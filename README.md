@@ -89,7 +89,7 @@ n8n generates a separate 256-bit signing secret for each registration. Incoming 
 
 Abandoned-submission timing is enforced by formbase, not n8n. formbase checks incomplete responses hourly and calls the registered n8n webhook after the selected idle window, so delivery can occur up to about one hour after the threshold.
 
-A completed request also creates a submission, so a **Submission Created** trigger on the same form runs for it too, with `data.request` set. Use one event or the other for a form, or branch on `{{ $json.data.request }}` in the submission workflow.
+One channel, one event: **Submission Created** runs for share-link submissions only, and a completed request runs **Request Completed** alone, never Submission Created. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
 
 ## Example workflows
 
@@ -126,7 +126,7 @@ Read a value with `{{ $json.data.answers.recommend }}`; the field keys come from
 
 The node passes the envelope through unchanged — it does not flatten answers into the top level of the item. Nothing is dropped, every key stays where the formbase contract puts it, and a field key can never collide with an envelope key such as `type` or `test`. Map the handful of values a workflow needs with a Set node, as the example workflow does.
 
-A submission that answered a request also carries `data.request` (`id`, and the caller's `externalId` and `metadata` when they were supplied). A response saved to PDF carries `data.submission.pdfUrl`; it is `null` when no PDF is kept. `test` is `true` for a test delivery, so a workflow can branch on it.
+A submission event never carries `data.request`: a submission that answered a request arrives as a `request.completed` event instead. A response saved to PDF carries `data.submission.pdfUrl`; it is `null` when no PDF is kept. `test` is `true` for a test delivery, so a workflow can branch on it.
 
 A request event carries the request itself in `data.request`: `id`, `status`, `outcome` (`approve`, `changes` or `decline` when the form has a decision), `externalId`, `metadata`, `context`, `recipient`, `language`, `createdAt` and `completedAt`, `expiredAt` or `canceledAt` (with `cancelReason`). A `request.completed` event also carries `form`, `submission`, `answers` and `display` exactly like a submission event; an expired or canceled request has no answers.
 

@@ -170,7 +170,7 @@ export class FormbaseTrigger implements INodeType {
         ],
         default: 'submission_created',
         description:
-          'Event to subscribe to. A completed request also counts as a submission, so a node on Submission Created runs for it too. Abandoned submissions require partial submission tracking.',
+          'Event to subscribe to. Submission events cover share-link submissions only; a completed request runs Request Completed alone, never Submission Created. Abandoned submissions require partial submission tracking.',
       },
       {
         displayName: 'Consider Abandoned After',

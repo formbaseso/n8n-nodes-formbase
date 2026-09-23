@@ -467,8 +467,9 @@ describe('FormbaseTrigger.webhook', () => {
   })
 
   it('passes the envelope through untouched so answers stay under their field keys', async () => {
+    // A key this version does not know about must survive too: the node never trims the envelope.
     const body = makeEventBody('submission.completed')
-    body.data = { ...(body.data as Record<string, unknown>), request: { id: 'req_1', externalId: 'ext_9' } }
+    body.data = { ...(body.data as Record<string, unknown>), unknownBlock: { id: 'blk_1', label: 'later' } }
     const rawBody = JSON.stringify(body)
     const ctx = makeWebhookContext({ body, secret: SECRET, rawBody, signatureHeader: signEvent(SECRET, Math.floor(Date.now() / 1000), rawBody) })
 
@@ -479,7 +480,7 @@ describe('FormbaseTrigger.webhook', () => {
     expect(item).toMatchObject({ id: 'evt_abc123', type: 'submission.completed', test: false })
     expect(data.answers).toEqual({ recommend: 9, plan: 'pro', contacts: [{ name: 'Ada' }] })
     expect(data.display).toEqual({ recommend: '9', plan: 'Pro', contacts: 'Ada' })
-    expect(data.request).toEqual({ id: 'req_1', externalId: 'ext_9' })
+    expect(data.unknownBlock).toEqual({ id: 'blk_1', label: 'later' })
     expect(item).not.toHaveProperty('fields')
   })
 

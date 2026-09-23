@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented here.
 
+## 0.7.0 - 2026-09-23
+
+- **Submission Created** and the other submission events cover share-link submissions only. A completed request runs **Request Completed** alone and no longer runs a Submission Created trigger on the same form (formbase ADR 0030, one channel, one event), so a workflow with both triggers runs once per completion, and a submission event never carries `data.request`. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
+
 ## 0.6.0 - 2026-09-23
 
 - Add the **formbase** node with the Request resource: **Create** a request for a form and a recipient with prefilled, read-only and context fields, reminders, expiry, language, metadata, test mode and email delivery; **Get**, **Get Many** (cursor paging across a form or the workspace, with status, outcome, external ID and test filters), **Cancel** with a reason, **Remind**, and **Replay Callback**. Form and field-key pickers load from the credential's workspace. The node is usable as an AI agent tool.
