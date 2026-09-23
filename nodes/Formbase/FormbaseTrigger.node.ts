@@ -84,9 +84,9 @@ export class FormbaseTrigger implements INodeType {
     group: ['trigger'],
     version: 1,
     subtitle:
-      '={{ ({ submission_created: "On submission created", submission_abandoned: "On submission abandoned", request_completed: "On request completed", request_expired: "On request expired", request_canceled: "On request canceled" })[$parameter["event"]] }}',
+      '={{ ({ submission_created: "On public link submission created", submission_abandoned: "On public link submission abandoned", request_completed: "On request completed", request_expired: "On request expired", request_canceled: "On request canceled" })[$parameter["event"]] }}',
     description:
-      'Starts the workflow when a formbase request is completed, expires or is canceled, or when a customer submits a form',
+      'Starts the workflow when a formbase request is completed, expires or is canceled, or when a customer submits a form through its public link',
     defaults: {
       name: 'formbase Trigger',
     },
@@ -135,18 +135,18 @@ export class FormbaseTrigger implements INodeType {
         // eslint-disable-next-line @n8n/community-nodes/options-sorted-alphabetically -- The default comes first.
         options: [
           {
-            name: 'Submission Created',
+            name: 'Public Link Submission Created',
             value: FORMBASE_WEBHOOK_EVENTS.submissionCreated,
-            action: 'On submission created',
+            action: 'On public link submission created',
             description:
-              'Runs when a respondent submits the selected form, and again when a completed submission is edited (event type submission.updated)',
+              'Runs when a respondent submits the selected form through its public link, and again when a completed submission is edited (event type submission.updated). A completed request runs Request Completed instead, never this event.',
           },
           {
-            name: 'Submission Abandoned',
+            name: 'Public Link Submission Abandoned',
             value: FORMBASE_WEBHOOK_EVENTS.submissionAbandoned,
-            action: 'On submission abandoned',
+            action: 'On public link submission abandoned',
             description:
-              'Runs when a respondent leaves the selected form before submitting it; requires partial submission tracking',
+              'Runs when a respondent leaves the selected form, opened through its public link, before submitting it; requires partial submission tracking',
           },
           {
             name: 'Request Completed',
@@ -170,7 +170,7 @@ export class FormbaseTrigger implements INodeType {
         ],
         default: 'submission_created',
         description:
-          'Event to subscribe to. Submission events cover share-link submissions only; a completed request runs Request Completed alone, never Submission Created. Abandoned submissions require partial submission tracking.',
+          'Event to subscribe to. Public link submission events cover the public link only; a completed request runs Request Completed alone, never Public Link Submission Created. Abandoned submissions require partial submission tracking.',
       },
       {
         displayName: 'Consider Abandoned After',

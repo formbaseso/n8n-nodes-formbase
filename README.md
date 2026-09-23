@@ -89,7 +89,7 @@ n8n generates a separate 256-bit signing secret for each registration. Incoming 
 
 Abandoned-submission timing is enforced by formbase, not n8n. formbase checks incomplete responses hourly and calls the registered n8n webhook after the selected idle window, so delivery can occur up to about one hour after the threshold.
 
-One channel, one event: **Submission Created** runs for share-link submissions only, and a completed request runs **Request Completed** alone, never Submission Created. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
+One channel, one event: **Public Link Submission Created** runs for public-link submissions only, and a completed request runs **Request Completed** alone, never Public Link Submission Created. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
 
 ## Example workflows
 

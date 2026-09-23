@@ -155,14 +155,14 @@ describe('formbase Trigger description', () => {
     const eventProperty = trigger.description.properties.find((property) => property.name === 'event')
     const idleWindowProperty = trigger.description.properties.find((property) => property.name === 'idleWindow')
 
-    expect(trigger.description.subtitle).toContain('On submission created')
-    expect(trigger.description.subtitle).toContain('On submission abandoned')
+    expect(trigger.description.subtitle).toContain('On public link submission created')
+    expect(trigger.description.subtitle).toContain('On public link submission abandoned')
     expect(trigger.description.subtitle).toContain('On request completed')
     expect(eventProperty).toMatchObject({
       default: 'submission_created',
       options: [
-        expect.objectContaining({ name: 'Submission Created', value: 'submission_created', action: 'On submission created' }),
-        expect.objectContaining({ name: 'Submission Abandoned', value: 'submission_abandoned', action: 'On submission abandoned' }),
+        expect.objectContaining({ name: 'Public Link Submission Created', value: 'submission_created', action: 'On public link submission created' }),
+        expect.objectContaining({ name: 'Public Link Submission Abandoned', value: 'submission_abandoned', action: 'On public link submission abandoned' }),
         expect.objectContaining({ name: 'Request Completed', value: 'request_completed', action: 'On request completed' }),
         expect.objectContaining({ name: 'Request Expired', value: 'request_expired', action: 'On request expired' }),
         expect.objectContaining({ name: 'Request Canceled', value: 'request_canceled', action: 'On request canceled' }),
