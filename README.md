@@ -6,7 +6,7 @@ Community nodes for [n8n](https://n8n.io) that create [formbase](https://formbas
 
 - **formbase** node: create a request for a form and a recipient, with prefilled and read-only fields, context, reminders, expiry and delivery by email; get, cancel, remind, list requests; replay a request's callback.
 - Pause a workflow until the recipient answers: **Wait for the Outcome** points the request's callback at n8n's Wait node, so the workflow resumes with the completed, expired or canceled request as its input.
-- **formbase Trigger** node: start a workflow when a request is completed, expires or is canceled, or when a customer submits a form through its public link. `data.request` carries the request ID and the caller's `externalId` and `metadata`, so the workflow that created the request can pick up where it left off.
+- **formbase Trigger** node: start a workflow when a request is completed, expires or is canceled, or when a respondent submits a form through its public link. `data.request` carries the request ID and the caller's `externalId` and `metadata`, so the workflow that created the request can pick up where it left off.
 - Trigger on abandoned submissions after a selected 12-hour, 1-day, 3-day, or 1-week idle window.
 - Load forms dynamically from the workspace the credential is scoped to, across every page.
 - Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.
@@ -79,7 +79,7 @@ The Wait node cannot check the `X-formbase-Signature` header that the callback c
 ## Use the trigger
 
 1. Add **formbase Trigger** to a workflow.
-2. Select form and event: a request that is completed, expires or is canceled, or a submission that is created or abandoned. For an abandoned-submission event, select how long the response must remain unchanged.
+2. Select form and event: a request that is completed, expires or is canceled, or a public-link submission that is created (also when the respondent updates it later) or abandoned. For an abandoned-submission event, select how long the response must remain unchanged.
 3. For a test execution, select **Listen for Test Event**, then submit the selected form.
 4. Activate the workflow. n8n registers its production webhook with formbase and removes it when the workflow is deactivated or deleted.
 

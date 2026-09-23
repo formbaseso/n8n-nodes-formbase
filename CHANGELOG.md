@@ -5,6 +5,7 @@ All notable changes to this project will be documented here.
 ## 0.7.0 - 2026-09-23
 
 - The submission events are named **Public Link Submission Created** and **Public Link Submission Abandoned** and cover public-link submissions only. A completed request runs **Request Completed** alone and no longer runs a submission trigger on the same form (formbase ADR 0030, one channel, one event), so a workflow with both triggers runs once per completion, and a submission event never carries `data.request`. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
+- Shorter event descriptions; **Public Link Submission Created** says it also runs when the respondent updates the submission later.
 
 ## 0.6.0 - 2026-09-23
 
