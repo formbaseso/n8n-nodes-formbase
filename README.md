@@ -1,10 +1,10 @@
 # n8n-nodes-formbase
 
-Community node for [n8n](https://n8n.io) that starts workflows when a [formbase](https://formbase.so) form receives a submission.
+Community node for [n8n](https://n8n.io) that resumes workflows when a customer completes a [formbase](https://formbase.so) request or submits a form. formbase collects and verifies information from customers for workflows and AI agents: a workflow creates a request, the customer completes a branded form without an account, and the verified answers arrive in n8n keyed by stable field keys.
 
 ## Features
 
-- Trigger on completed submissions.
+- Trigger on completed submissions, including submissions that answer a request. `data.request` carries the request ID and the caller's `externalId` and `metadata`, so the workflow that created the request can resume.
 - Trigger on abandoned submissions after a selected 12-hour, 1-day, 3-day, or 1-week idle window.
 - Load forms dynamically from the workspace the credential is scoped to, across every page.
 - Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.

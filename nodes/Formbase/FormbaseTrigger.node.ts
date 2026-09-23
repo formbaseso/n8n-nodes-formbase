@@ -132,7 +132,7 @@ export class FormbaseTrigger implements INodeType {
     version: 1,
     subtitle:
       '={{ $parameter["event"] === "submission_created" ? "On submission created" : "On submission abandoned" }}',
-    description: 'Starts the workflow when a formbase form receives a submission',
+    description: 'Starts the workflow when a customer completes a formbase request or submits a form',
     defaults: {
       name: 'formbase Trigger',
     },

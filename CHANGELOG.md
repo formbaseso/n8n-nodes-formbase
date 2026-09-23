@@ -11,6 +11,7 @@ All notable changes to this project will be documented here.
 - Register exactly one subscription per node: activation keeps the subscription it registered last and removes any other n8n subscription for the same webhook URL and event, so a second, unverifiable delivery path never stays open.
 - List forms from the workspace the credential is scoped to, across every `forms.list` page, instead of fanning out over workspaces.
 - Offer the default event first and idle windows shortest first.
+- Describe the node in terms of requests: it resumes workflows when a customer completes a request or submits a form.
 
 ## 0.4.1 - 2026-07-16
 
