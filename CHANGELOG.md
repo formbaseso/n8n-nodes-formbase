@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented here.
 
+## 0.5.1 - 2026-09-23
+
+- Describe the node in terms of requests: it resumes workflows when a customer completes a request or submits a form.
+
 ## 0.5.0 - 2026-09-22
 
 - Read the formbase event envelope (`id`, `type`, `createdAt`, `apiVersion`, `test`, `data`) that replaced the flat payload. `fields[]` is gone: every answer arrives once in `data.answers` keyed by field key, with the readable text in `data.display`. Event types are `submission.completed`, `submission.updated` and `submission.abandoned`; the PDF link is `data.submission.pdfUrl`.
@@ -11,7 +15,6 @@ All notable changes to this project will be documented here.
 - Register exactly one subscription per node: activation keeps the subscription it registered last and removes any other n8n subscription for the same webhook URL and event, so a second, unverifiable delivery path never stays open.
 - List forms from the workspace the credential is scoped to, across every `forms.list` page, instead of fanning out over workspaces.
 - Offer the default event first and idle windows shortest first.
-- Describe the node in terms of requests: it resumes workflows when a customer completes a request or submits a form.
 
 ## 0.4.1 - 2026-07-16
 
