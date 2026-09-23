@@ -123,6 +123,36 @@ describe('formbase Trigger lifecycle', () => {
     expect(formbase.subscriptions.size).toBe(0)
   })
 
+  it('subscribes to request outcomes and receives the request envelope', async () => {
+    const trigger = new FormbaseTrigger()
+
+    // A request subscription registers without an idle window, whatever the idle-window parameter holds.
+    const activation = makeHookContext({ event: 'request_completed', idleWindow: '3d' })
+    expect(await trigger.webhookMethods.default.create.call(activation as never)).toBe(true)
+    const subscriptionId = activation.staticData.subscriptionId as string
+    expect(formbase.subscriptions.get(subscriptionId)).toMatchObject({ eventType: 'request_completed', targetUrl: WEBHOOK_URL })
+    expect(formbase.subscriptions.get(subscriptionId)).not.toHaveProperty('idleWindow')
+
+    // A completed request arrives with the request block and the answers.
+    const completed = formbase.buildRequestEvent({ formId: 'form_live', type: 'request.completed', answers: { company_name: 'Acme' }, display: { company_name: 'Acme' } })
+    const received = makeWebhookContext(activation.staticData, formbase.deliver(subscriptionId, completed))
+    expect(await trigger.webhook.call(received as never)).toEqual({ workflowData: [[{ json: completed }]] })
+
+    // Expired and canceled requests use the same subscription lifecycle and the same signature check.
+    const changed = makeHookContext({ event: 'request_canceled', staticData: activation.staticData })
+    expect(await trigger.webhookMethods.default.checkExists.call(changed as never)).toBe(false)
+    expect(await trigger.webhookMethods.default.create.call(changed as never)).toBe(true)
+    const canceledId = changed.staticData.subscriptionId as string
+    const canceled = formbase.buildRequestEvent({ formId: 'form_live', type: 'request.canceled', request: { cancelReason: 'duplicate' } })
+    const canceledDelivery = formbase.deliver(canceledId, canceled)
+    expect(await trigger.webhook.call(makeWebhookContext(changed.staticData, canceledDelivery) as never)).toEqual({ workflowData: [[{ json: canceled }]] })
+    const forged = makeWebhookContext(changed.staticData, formbase.deliver(subscriptionId, canceled))
+    expect(await trigger.webhook.call(forged as never)).toEqual({ noWebhookResponse: true })
+    expect(forged.response.status).toHaveBeenCalledWith(401)
+
+    await formbase.subscriptions.clear()
+  })
+
   it('treats a subscription formbase already dropped as deleted', async () => {
     const trigger = new FormbaseTrigger()
     const ctx = makeHookContext({ staticData: { subscriptionId: 'int_gone', webhookSecret: 'x' } })

@@ -18,24 +18,9 @@ import {
   type FormbaseIdleWindow,
   type FormbaseWebhookEvent,
 } from './constants'
+import { listForms, type ListResponse } from './FormbaseCatalog'
 import { createFormbaseWebhookSecret, verifyFormbaseWebhookSignature } from './FormbaseWebhookSignature'
 import { formbaseApiRequest } from './GenericFunctions'
-
-interface FormSummary {
-  id: string
-  name: string
-}
-
-interface WorkspaceSummary {
-  id: string
-  name: string
-}
-
-interface ListResponse<T> {
-  items: T[]
-  hasMore: boolean
-  nextCursor?: string | null
-}
 
 /** One row of `webhooks.list`. */
 interface WebhookSubscription {
@@ -52,38 +37,6 @@ interface Registration {
   formId: string
   eventType: FormbaseWebhookEvent
   idleWindow?: FormbaseIdleWindow
-}
-
-const FORMS_PAGE_SIZE = 100
-
-/**
- * Every form of the connected workspace. A formbase OAuth token is scoped to
- * the one workspace the user picked on the consent screen, so `workspaces.list`
- * answers with exactly that workspace.
- */
-async function listForms(context: ILoadOptionsFunctions): Promise<FormSummary[]> {
-  const workspaces = await formbaseApiRequest<ListResponse<WorkspaceSummary>>(context, 'workspaces.list')
-  const workspace = workspaces.items[0]
-  if (!workspace) {
-    throw new NodeOperationError(context.getNode(), 'This formbase credential has no workspace. Reconnect it and pick one.')
-  }
-
-  const forms: FormSummary[] = []
-  let cursor: string | undefined
-  do {
-    const page = await formbaseApiRequest<ListResponse<FormSummary>>(context, 'forms.list', {
-      workspaceId: workspace.id,
-      limit: FORMS_PAGE_SIZE,
-      ...(cursor ? { cursor } : {}),
-    })
-    forms.push(...page.items)
-    if (page.hasMore && !page.nextCursor) {
-      throw new NodeApiError(context.getNode(), { message: 'formbase returned an incomplete forms page' })
-    }
-    cursor = page.hasMore ? (page.nextCursor ?? undefined) : undefined
-  } while (cursor)
-
-  return forms
 }
 
 /** The registration the node's parameters describe, or null while the node is not configured. */
@@ -131,8 +84,9 @@ export class FormbaseTrigger implements INodeType {
     group: ['trigger'],
     version: 1,
     subtitle:
-      '={{ $parameter["event"] === "submission_created" ? "On submission created" : "On submission abandoned" }}',
-    description: 'Starts the workflow when a customer completes a formbase request or submits a form',
+      '={{ ({ submission_created: "On submission created", submission_abandoned: "On submission abandoned", request_completed: "On request completed", request_expired: "On request expired", request_canceled: "On request canceled" })[$parameter["event"]] }}',
+    description:
+      'Starts the workflow when a formbase request is completed, expires or is canceled, or when a customer submits a form',
     defaults: {
       name: 'formbase Trigger',
     },
@@ -153,12 +107,12 @@ export class FormbaseTrigger implements INodeType {
       },
     ],
     triggerPanel: {
-      header: 'Listening for formbase submissions',
+      header: 'Listening for formbase events',
       executionsHelp: {
         inactive:
-          'While building the workflow, click <em>Listen for Test Event</em> and submit the form once. New submissions arrive in real time after the workflow is activated.',
+          'While building the workflow, click <em>Listen for Test Event</em> and submit the form once, or complete, cancel or let a request expire. Events arrive in real time after the workflow is activated.',
         active:
-          'New submissions to the selected form trigger this workflow. The webhook remains registered while the workflow is active.',
+          'Events for the selected form trigger this workflow. The webhook remains registered while the workflow is active.',
       },
       activationHint: 'Activate the workflow to register the webhook with formbase. Deactivating removes it.',
     },
@@ -194,9 +148,29 @@ export class FormbaseTrigger implements INodeType {
             description:
               'Runs when a respondent leaves the selected form before submitting it; requires partial submission tracking',
           },
+          {
+            name: 'Request Completed',
+            value: FORMBASE_WEBHOOK_EVENTS.requestCompleted,
+            action: 'On request completed',
+            description:
+              'Runs when a recipient completes a request for the selected form, with the answers and the outcome (event type request.completed)',
+          },
+          {
+            name: 'Request Expired',
+            value: FORMBASE_WEBHOOK_EVENTS.requestExpired,
+            action: 'On request expired',
+            description: 'Runs when a request for the selected form reaches its expiry without being completed',
+          },
+          {
+            name: 'Request Canceled',
+            value: FORMBASE_WEBHOOK_EVENTS.requestCanceled,
+            action: 'On request canceled',
+            description: 'Runs when a request for the selected form is canceled, with the reason when one was given',
+          },
         ],
         default: 'submission_created',
-        description: 'Event to subscribe to. Abandoned submissions require partial submission tracking.',
+        description:
+          'Event to subscribe to. A completed request also counts as a submission, so a node on Submission Created runs for it too. Abandoned submissions require partial submission tracking.',
       },
       {
         displayName: 'Consider Abandoned After',

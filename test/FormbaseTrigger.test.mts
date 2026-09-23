@@ -102,6 +102,33 @@ function makeEventBody(type: string): Record<string, unknown> {
   }
 }
 
+function makeRequestEventBody(type: string): Record<string, unknown> {
+  const status = type.replace('request.', '')
+  const request = {
+    id: 'req_1',
+    externalId: 'run-42',
+    status,
+    language: 'en',
+    recipient: { email: 'ada@acme.com', name: 'Ada' },
+    metadata: { runId: 'run-42' },
+    context: { case_id: 'CASE-9' },
+    createdAt: '2026-09-22T09:00:00.000Z',
+    ...(status === 'completed' ? { outcome: 'approve', completedAt: '2026-09-22T12:34:56.000Z' } : {}),
+    ...(status === 'expired' ? { expiredAt: '2026-09-22T12:34:56.000Z' } : {}),
+    ...(status === 'canceled' ? { canceledAt: '2026-09-22T12:34:56.000Z', cancelReason: 'duplicate' } : {}),
+  }
+  const completion =
+    status === 'completed'
+      ? {
+          form: { id: 'frm_abc123', name: 'Vendor onboarding', snapshotId: 'snp_1' },
+          submission: { id: 'sub_xyz789', respondentEmail: 'ada@acme.com', submittedAt: '2026-09-22T12:34:56.000Z', pdfUrl: null, language: 'en' },
+          answers: { company_name: 'Acme' },
+          display: { company_name: 'Acme' },
+        }
+      : {}
+  return { id: 'evt_req123', type, createdAt: '2026-09-22T12:34:56.000Z', apiVersion: '2026-09-22', test: false, data: { request, ...completion } }
+}
+
 const subscription = (overrides: Record<string, unknown>) => ({
   subscriptionId: 'sub_match',
   targetUrl: 'https://n8n.example/hook/X',
@@ -130,11 +157,15 @@ describe('formbase Trigger description', () => {
 
     expect(trigger.description.subtitle).toContain('On submission created')
     expect(trigger.description.subtitle).toContain('On submission abandoned')
+    expect(trigger.description.subtitle).toContain('On request completed')
     expect(eventProperty).toMatchObject({
       default: 'submission_created',
       options: [
         expect.objectContaining({ name: 'Submission Created', value: 'submission_created', action: 'On submission created' }),
         expect.objectContaining({ name: 'Submission Abandoned', value: 'submission_abandoned', action: 'On submission abandoned' }),
+        expect.objectContaining({ name: 'Request Completed', value: 'request_completed', action: 'On request completed' }),
+        expect.objectContaining({ name: 'Request Expired', value: 'request_expired', action: 'On request expired' }),
+        expect.objectContaining({ name: 'Request Canceled', value: 'request_canceled', action: 'On request canceled' }),
       ],
     })
     expect(eventProperty?.options?.[0]?.description).toContain('submission.updated')
@@ -352,6 +383,22 @@ describe('FormbaseTrigger.webhookMethods.default.create', () => {
 
     expect(mockedRequest.mock.calls[0][2]).not.toHaveProperty('idleWindow')
   })
+
+  it.each(['request_completed', 'request_expired', 'request_canceled'])('registers %s with a signing secret and no idle window', async (event) => {
+    const ctx = makeHookContext({ webhookUrl: 'https://n8n.example/hook/NEW', formId: 'f1', event, idleWindow: '3d' })
+    respond(() => ({ subscriptionId: 'sub_new' }))
+
+    expect(await new FormbaseTrigger().webhookMethods.default.create.call(ctx as never)).toBe(true)
+
+    calledWith('webhooks.create', {
+      formId: 'f1',
+      targetUrl: 'https://n8n.example/hook/NEW',
+      provider: 'n8n',
+      eventType: event,
+      signingSecret: expect.stringMatching(/^whsec_[a-f0-9]{64}$/),
+    })
+    expect(ctx._staticData.subscriptionId).toBe('sub_new')
+  })
 })
 
 describe('FormbaseTrigger.webhookMethods.default.delete', () => {
@@ -403,6 +450,20 @@ describe('FormbaseTrigger.webhook', () => {
 
     expect(result.workflowData).toEqual([[{ json: body }]])
     expect(ctx._response.status).not.toHaveBeenCalled()
+  })
+
+  it.each(['request.completed', 'request.expired', 'request.canceled'])('emits a valid signed %s event as one n8n item', async (type) => {
+    const body = makeRequestEventBody(type)
+    const rawBody = JSON.stringify(body)
+    const ctx = makeWebhookContext({ body, secret: SECRET, rawBody, signatureHeader: signEvent(SECRET, Math.floor(Date.now() / 1000), rawBody) })
+
+    const result = await new FormbaseTrigger().webhook.call(ctx as never)
+
+    expect(result.workflowData).toEqual([[{ json: body }]])
+    const data = (result.workflowData?.[0]?.[0]?.json as { data: Record<string, unknown> }).data
+    expect(data.request).toMatchObject({ id: 'req_1', externalId: 'run-42', status: type.replace('request.', '') })
+    if (type === 'request.completed') expect(data.answers).toEqual({ company_name: 'Acme' })
+    else expect(data).not.toHaveProperty('answers')
   })
 
   it('passes the envelope through untouched so answers stay under their field keys', async () => {

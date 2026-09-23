@@ -6,6 +6,8 @@ import { vi } from 'vitest'
 
 export const ACCESS_TOKEN = 'fbo_access'
 const IDLE_WINDOWS = ['12h', '1d', '3d', '1w']
+const SUBMISSION_EVENT_TYPES = ['submission_created', 'submission_abandoned']
+const REQUEST_EVENT_TYPES = ['request_completed', 'request_expired', 'request_canceled']
 
 interface FakeForm {
   id: string
@@ -23,6 +25,19 @@ interface StoredSubscription {
   status: 'active'
   createdAt: number
   signingSecret?: string
+}
+
+/** A request as `requests.create` stores it; `params` is the create body, kept for assertions and idempotency. */
+export interface StoredRequest {
+  id: string
+  status: 'pending' | 'completed' | 'expired' | 'canceled'
+  formId: string
+  params: Record<string, unknown>
+  url: string
+  externalId: string | null
+  isTest: boolean
+  remindersSent: number
+  cancelReason?: string
 }
 
 type RpcResult = { data: unknown } | { status: number; error: { code: string; message: string } }
@@ -53,10 +68,12 @@ export class FakeFormbase {
   readonly forms: FakeForm[]
   readonly fields: Record<string, unknown[]>
   readonly subscriptions = new Map<string, StoredSubscription>()
+  readonly requests = new Map<string, StoredRequest>()
   readonly calls: Array<{ method: string; params: Record<string, unknown> }> = []
   baseUrl = ''
   private server?: http.Server
   private nextSubscriptionId = 1
+  private nextRequestId = 1
 
   constructor(options: { forms?: FakeForm[]; fields?: Record<string, unknown[]> } = {}) {
     this.forms = options.forms ?? [{ id: 'form_1', name: 'Customer Feedback', published: true }]
@@ -115,6 +132,31 @@ export class FakeFormbase {
         return { data: { subscriptionId: params.subscriptionId, deleted: true } }
       case 'submissions.sample':
         return { data: this.buildEvent({ formId: String(params.formId), test: true }) }
+      case 'requests.create':
+        return this.createRequest(params)
+      case 'requests.get':
+        return this.withRequest(params, (request) => ({ data: { ...requestSummary(request), answers: null, display: null, timeline: [] } }))
+      case 'requests.list':
+        return this.listRequests(params)
+      case 'requests.cancel':
+        return this.withRequest(params, (request) => {
+          if (request.status !== 'pending') return conflict('REQUEST_NOT_PENDING')
+          request.status = 'canceled'
+          if (params.reason !== undefined) request.cancelReason = String(params.reason)
+          return { data: requestSummary(request) }
+        })
+      case 'requests.remind':
+        return this.withRequest(params, (request) => {
+          if (request.status !== 'pending') return conflict('REQUEST_NOT_PENDING')
+          request.remindersSent += 1
+          return { data: requestSummary(request) }
+        })
+      case 'requests.replayCallback':
+        return this.withRequest(params, (request) => {
+          if (request.status === 'pending') return conflict('REQUEST_NOT_TERMINAL')
+          if (!request.params.callbackUrl) return conflict('NO_CALLBACK_TO_REPLAY')
+          return { data: { dispatchId: `disp_${request.id}`, eventId: `evt_${request.id}` } }
+        })
       default:
         return { status: 404, error: { code: 'METHOD_NOT_FOUND', message: `Unknown method: ${method}` } }
     }
@@ -137,18 +179,17 @@ export class FakeFormbase {
   }
 
   private createWebhook(params: Record<string, unknown>): RpcResult {
-    const invalid = (message: string): RpcResult => ({ status: 400, error: { code: 'VALIDATION_ERROR', message } })
     if (!this.forms.some((form) => form.id === params.formId)) return notFound('Form not found')
     if (!/^https:\/\//.test(String(params.targetUrl ?? ''))) return invalid('targetUrl must be an https URL')
     if (!['zapier', 'make', 'n8n'].includes(String(params.provider))) return invalid('provider must be one of zapier, make, n8n')
     const eventType = String(params.eventType ?? 'submission_created')
-    if (eventType !== 'submission_created' && eventType !== 'submission_abandoned') {
-      return invalid('eventType must be "submission_created" or "submission_abandoned"')
+    if (!SUBMISSION_EVENT_TYPES.includes(eventType) && !REQUEST_EVENT_TYPES.includes(eventType)) {
+      return invalid('eventType must be one of submission_created, submission_abandoned, request_completed, request_expired, request_canceled')
     }
     if (eventType === 'submission_abandoned' && !IDLE_WINDOWS.includes(String(params.idleWindow))) {
       return invalid('idleWindow is required when eventType is "submission_abandoned"')
     }
-    if (eventType === 'submission_created' && params.idleWindow !== undefined) {
+    if (eventType !== 'submission_abandoned' && params.idleWindow !== undefined) {
       return invalid('idleWindow is only valid when eventType is "submission_abandoned"')
     }
     const signingSecret = params.signingSecret === undefined ? undefined : String(params.signingSecret)
@@ -168,6 +209,97 @@ export class FakeFormbase {
     }
     this.subscriptions.set(subscription.subscriptionId, subscription)
     return { data: publicView(subscription) }
+  }
+
+  private createRequest(params: Record<string, unknown>): RpcResult {
+    const form = this.forms.find((candidate) => candidate.id === params.formId)
+    if (!form) return notFound('Form not found')
+    if (!form.published) return invalid('FORM_NOT_PUBLISHED')
+    if (params.callbackUrl !== undefined && !/^https:\/\//.test(String(params.callbackUrl))) return invalid('callbackUrl must be an https URL')
+    if (params.idempotencyKey !== undefined) {
+      const existing = [...this.requests.values()].find((request) => request.params.idempotencyKey === params.idempotencyKey)
+      if (existing) {
+        if (JSON.stringify(existing.params) !== JSON.stringify(params)) return conflict('IDEMPOTENCY_CONFLICT')
+        return { data: { ...requestSummary(existing), deduplicated: true } }
+      }
+    }
+    const id = `req_${this.nextRequestId++}`
+    const request: StoredRequest = {
+      id,
+      status: 'pending',
+      formId: form.id,
+      params,
+      url: `https://forms.formbase.so/r/rq_${id}`,
+      externalId: params.externalId === undefined ? null : String(params.externalId),
+      isTest: params.test === true,
+      remindersSent: 0,
+    }
+    this.requests.set(id, request)
+    return { data: { ...requestSummary(request), deduplicated: false } }
+  }
+
+  private withRequest(params: Record<string, unknown>, handle: (request: StoredRequest) => RpcResult): RpcResult {
+    const request = this.requests.get(String(params.requestId))
+    if (!request) return notFound('Request not found')
+    return handle(request)
+  }
+
+  private listRequests(params: Record<string, unknown>): RpcResult {
+    if (params.workspaceId === undefined && params.formId === undefined) return invalid('SCOPE_REQUIRED')
+    if (params.workspaceId !== undefined && params.workspaceId !== this.workspace.id) return notFound('Workspace not found')
+    const matching = [...this.requests.values()]
+      .filter((request) => params.formId === undefined || request.formId === params.formId)
+      .filter((request) => params.status === undefined || request.status === params.status)
+      .filter((request) => params.externalId === undefined || request.externalId === params.externalId)
+      .filter((request) => params.includeTest === true || !request.isTest)
+      .reverse()
+    const limit = Number(params.limit ?? 25)
+    const start = params.cursor ? Number(params.cursor) : 0
+    const items = matching.slice(start, start + limit).map(requestSummary)
+    const hasMore = start + limit < matching.length
+    return { data: { items, hasMore, nextCursor: hasMore ? String(start + limit) : null } }
+  }
+
+  /** Moves a stored request to a terminal state, as the recipient, the clock or the dashboard would. */
+  settleRequest(requestId: string, status: 'completed' | 'expired' | 'canceled'): StoredRequest {
+    const request = this.requests.get(requestId)
+    if (!request) throw new Error(`No request ${requestId}`)
+    request.status = status
+    return request
+  }
+
+  /** The request event envelope: `data.request` always, the submission block only on completion. */
+  buildRequestEvent(options: {
+    formId: string
+    type: 'request.completed' | 'request.expired' | 'request.canceled'
+    request?: Record<string, unknown>
+    answers?: Record<string, unknown>
+    display?: Record<string, string>
+  }): Record<string, unknown> {
+    const status = options.type.replace('request.', '')
+    const request = {
+      id: 'req_1',
+      externalId: 'run-42',
+      status,
+      language: 'en',
+      recipient: { email: 'ada@acme.com', name: 'Ada' },
+      metadata: { runId: 'run-42' },
+      context: {},
+      createdAt: '2026-09-22T09:00:00.000Z',
+      ...options.request,
+    }
+    if (options.type !== 'request.completed') {
+      return {
+        id: `evt_${Math.random().toString(16).slice(2, 14)}`,
+        type: options.type,
+        createdAt: '2026-09-22T10:00:00.000Z',
+        apiVersion: '2026-09-22',
+        test: false,
+        data: { request },
+      }
+    }
+    const event = this.buildEvent({ formId: options.formId, type: options.type, answers: options.answers, display: options.display })
+    return { ...event, data: { request, ...(event.data as Record<string, unknown>) } }
   }
 
   /** The event envelope for one form. */
@@ -222,6 +354,32 @@ function publicView(subscription: StoredSubscription) {
 
 function notFound(message: string): RpcResult {
   return { status: 404, error: { code: 'NOT_FOUND', message } }
+}
+
+function invalid(message: string): RpcResult {
+  return { status: 400, error: { code: 'VALIDATION_ERROR', message } }
+}
+
+function conflict(reason: string): RpcResult {
+  return { status: 409, error: { code: 'CONFLICT', message: reason } }
+}
+
+/** What `requests.create`, `requests.cancel`, `requests.remind` and `requests.list` return: the summary, never the callback URL. */
+function requestSummary(request: StoredRequest) {
+  return {
+    id: request.id,
+    status: request.status,
+    url: request.url,
+    formId: request.formId,
+    externalId: request.externalId,
+    isTest: request.isTest,
+    deliveryStatus: 'not_requested',
+    hasCallback: request.params.callbackUrl !== undefined,
+    remindersSent: request.remindersSent,
+    ...(request.cancelReason !== undefined ? { cancelReason: request.cancelReason } : {}),
+    expiresAt: 1794787200000,
+    createdAt: 1792195200000,
+  }
 }
 
 const NODE = { name: 'formbase Trigger', type: 'formbaseTrigger', typeVersion: 1 }

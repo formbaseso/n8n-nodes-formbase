@@ -1,9 +1,15 @@
-import type { IHookFunctions, ILoadOptionsFunctions, IWebhookFunctions, IHttpRequestOptions } from 'n8n-workflow'
+import type {
+  IExecuteFunctions,
+  IHookFunctions,
+  ILoadOptionsFunctions,
+  IWebhookFunctions,
+  IHttpRequestOptions,
+} from 'n8n-workflow'
 import { NodeApiError } from 'n8n-workflow'
 
 import { FORMBASE_API_RESOURCE_URL, FORMBASE_OAUTH2_CREDENTIAL_NAME } from './constants'
 
-export type FormbaseRpcContext = IHookFunctions | ILoadOptionsFunctions | IWebhookFunctions
+export type FormbaseRpcContext = IExecuteFunctions | IHookFunctions | ILoadOptionsFunctions | IWebhookFunctions
 
 interface FormbaseRpcOk<T> {
   ok: true

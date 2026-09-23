@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-formbase",
-  "version": "0.5.1",
-  "description": "n8n community node for formbase — resume workflows when a customer completes a request or submits a form. Collect and verify customer information for workflows and AI agents.",
+  "version": "0.6.0",
+  "description": "n8n community nodes for formbase — create requests, pause a workflow until a customer completes one, and trigger on completed, expired or canceled requests and on form submissions. Collect and verify customer information for workflows and AI agents.",
   "keywords": [
     "n8n-community-node-package",
     "n8n",
@@ -48,6 +48,7 @@
       "dist/credentials/FormbaseOAuth2Api.credentials.js"
     ],
     "nodes": [
+      "dist/nodes/Formbase/Formbase.node.js",
       "dist/nodes/Formbase/FormbaseTrigger.node.js"
     ]
   },

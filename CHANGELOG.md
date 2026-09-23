@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here.
 
+## 0.6.0 - 2026-09-23
+
+- Add the **formbase** node with the Request resource: **Create** a request for a form and a recipient with prefilled, read-only and context fields, reminders, expiry, language, metadata, test mode and email delivery; **Get**, **Get Many** (cursor paging across a form or the workspace, with status, outcome, external ID and test filters), **Cancel** with a reason, **Remind**, and **Replay Callback**. Form and field-key pickers load from the credential's workspace. The node is usable as an AI agent tool.
+- **Wait for the Outcome** on Create points the request's callback at `{{ $execution.resumeUrl }}`, so a Wait node set to *On Webhook Call* pauses the workflow until the request is completed, expires or is canceled, and resumes it with the event envelope under `$json.body`. Setting a Callback URL of your own at the same time is refused.
+- Create sends **External ID** as the request's `idempotencyKey`, so a retried execution gets the same request back instead of creating a second one.
+- The trigger offers **Request Completed**, **Request Expired** and **Request Canceled** events next to the submission events, registered and verified the same way. A completed request also runs a Submission Created trigger on the same form.
+- Add `examples/formbase-request-wait.json`, the create-wait-branch pattern end to end.
+
 ## 0.5.1 - 2026-09-23
 
 - Describe the node in terms of requests: it resumes workflows when a customer completes a request or submits a form.
