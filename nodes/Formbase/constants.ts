@@ -8,6 +8,7 @@ export const FORMBASE_OAUTH2_CREDENTIAL_NAME = 'formbaseOAuth2Api'
 
 export const FORMBASE_WEBHOOK_EVENTS = {
   submissionCreated: 'submission_created',
+  submissionUpdated: 'submission_updated',
   submissionAbandoned: 'submission_abandoned',
   requestCompleted: 'request_completed',
   requestExpired: 'request_expired',

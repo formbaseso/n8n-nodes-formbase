@@ -6,7 +6,7 @@ import { vi } from 'vitest'
 
 export const ACCESS_TOKEN = 'fbo_access'
 const IDLE_WINDOWS = ['12h', '1d', '3d', '1w']
-const SUBMISSION_EVENT_TYPES = ['submission_created', 'submission_abandoned']
+const SUBMISSION_EVENT_TYPES = ['submission_created', 'submission_updated', 'submission_abandoned']
 const REQUEST_EVENT_TYPES = ['request_completed', 'request_expired', 'request_canceled']
 
 interface FakeForm {
@@ -184,7 +184,7 @@ export class FakeFormbase {
     if (!['zapier', 'make', 'n8n'].includes(String(params.provider))) return invalid('provider must be one of zapier, make, n8n')
     const eventType = String(params.eventType ?? 'submission_created')
     if (!SUBMISSION_EVENT_TYPES.includes(eventType) && !REQUEST_EVENT_TYPES.includes(eventType)) {
-      return invalid('eventType must be one of submission_created, submission_abandoned, request_completed, request_expired, request_canceled')
+      return invalid('eventType must be one of submission_created, submission_updated, submission_abandoned, request_completed, request_expired, request_canceled')
     }
     if (eventType === 'submission_abandoned' && !IDLE_WINDOWS.includes(String(params.idleWindow))) {
       return invalid('idleWindow is required when eventType is "submission_abandoned"')

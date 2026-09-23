@@ -84,7 +84,7 @@ export class FormbaseTrigger implements INodeType {
     group: ['trigger'],
     version: 1,
     subtitle:
-      '={{ ({ submission_created: "On public link submission created", submission_abandoned: "On public link submission abandoned", request_completed: "On request completed", request_expired: "On request expired", request_canceled: "On request canceled" })[$parameter["event"]] }}',
+      '={{ ({ submission_created: "On public link submission created", submission_updated: "On public link submission updated", submission_abandoned: "On public link submission abandoned", request_completed: "On request completed", request_expired: "On request expired", request_canceled: "On request canceled" })[$parameter["event"]] }}',
     description:
       'Starts the workflow when a formbase request is completed, expires or is canceled, or when a respondent submits a form through its public link',
     defaults: {
@@ -139,7 +139,14 @@ export class FormbaseTrigger implements INodeType {
             value: FORMBASE_WEBHOOK_EVENTS.submissionCreated,
             action: 'On public link submission created',
             description:
-              'Runs when a respondent submits the selected form through its public link, and again when they update that submission later (event type submission.updated). A completed request runs Request Completed instead.',
+              'Runs when a respondent submits the selected form through its public link (event type submission.completed). An edit after submit runs Public Link Submission Updated; a completed request runs Request Completed.',
+          },
+          {
+            name: 'Public Link Submission Updated',
+            value: FORMBASE_WEBHOOK_EVENTS.submissionUpdated,
+            action: 'On public link submission updated',
+            description:
+              'Runs when a respondent edits a public-link submission they already sent (event type submission.updated). The form must allow editing after submit.',
           },
           {
             name: 'Public Link Submission Abandoned',

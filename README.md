@@ -79,7 +79,7 @@ The Wait node cannot check the `X-formbase-Signature` header that the callback c
 ## Use the trigger
 
 1. Add **formbase Trigger** to a workflow.
-2. Select form and event: a request that is completed, expires or is canceled, or a public-link submission that is created (also when the respondent updates it later) or abandoned. For an abandoned-submission event, select how long the response must remain unchanged.
+2. Select form and event: a request that is completed, expires or is canceled, or a public-link submission that is created, updated or abandoned. For an abandoned-submission event, select how long the response must remain unchanged.
 3. For a test execution, select **Listen for Test Event**, then submit the selected form.
 4. Activate the workflow. n8n registers its production webhook with formbase and removes it when the workflow is deactivated or deleted.
 
@@ -90,6 +90,8 @@ n8n generates a separate 256-bit signing secret for each registration. Incoming 
 Abandoned-submission timing is enforced by formbase, not n8n. formbase checks incomplete responses hourly and calls the registered n8n webhook after the selected idle window, so delivery can occur up to about one hour after the threshold.
 
 One channel, one event: **Public Link Submission Created** runs for public-link submissions only, and a completed request runs **Request Completed** alone, never Public Link Submission Created. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
+
+**Public Link Submission Created** runs only when a respondent first submits (`submission.completed`). An edit after submit runs **Public Link Submission Updated** (`submission.updated`) instead, and needs the form to allow editing after submit. Requests never produce an update event.
 
 ## Example workflows
 
@@ -163,11 +165,18 @@ Delivered events use these `type` values:
 | `request.completed`    | The recipient completed the request. `data.answers` holds the answers.   |
 | `request.expired`      | The request reached its expiry before it was completed.                  |
 | `request.canceled`     | The caller canceled the request.                                         |
-| `submission.completed` | A respondent completed a new response.                                   |
-| `submission.updated`   | An existing completed response changed.                                  |
-| `submission.abandoned` | An incomplete response reached the configured idle window.               |
+| `submission.completed` | A respondent submitted the form through its public link.                 |
+| `submission.updated`   | A respondent edited a public-link submission they already sent.          |
+| `submission.abandoned` | An incomplete public-link response reached the configured idle window.   |
 
-Webhook registration events (`request_completed`, `request_expired`, `request_canceled`, `submission_created` and `submission_abandoned`) select which deliveries trigger the workflow. The event `type` identifies what happened. Use `id` to deduplicate retries; the same values arrive as `X-formbase-Event-Id` and `X-formbase-Event-Type` headers.
+Webhook registration events select which deliveries trigger the workflow, and each one delivers a single event `type`:
+
+- `submission_created` (**Public Link Submission Created**) delivers `submission.completed`.
+- `submission_updated` (**Public Link Submission Updated**) delivers `submission.updated`.
+- `submission_abandoned` (**Public Link Submission Abandoned**) delivers `submission.abandoned`, after the selected idle window.
+- `request_completed`, `request_expired` and `request_canceled` deliver `request.completed`, `request.expired` and `request.canceled`.
+
+Use `id` to deduplicate retries; the same values arrive as `X-formbase-Event-Id` and `X-formbase-Event-Type` headers.
 
 Full contracts: [formbase API methods](https://docs.formbase.so/developers/rest-api) and [webhook reference](https://docs.formbase.so/developers/webhooks-reference).
 

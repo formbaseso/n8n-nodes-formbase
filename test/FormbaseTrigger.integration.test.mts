@@ -153,6 +153,31 @@ describe('formbase Trigger lifecycle', () => {
     await formbase.subscriptions.clear()
   })
 
+  it('subscribes to public-link submission edits on their own event', async () => {
+    const trigger = new FormbaseTrigger()
+
+    // An updated-submission subscription registers without an idle window, whatever the idle-window parameter holds.
+    const activation = makeHookContext({ event: 'submission_updated', idleWindow: '3d' })
+    expect(await trigger.webhookMethods.default.create.call(activation as never)).toBe(true)
+    const subscriptionId = activation.staticData.subscriptionId as string
+    expect(formbase.subscriptions.get(subscriptionId)).toMatchObject({ eventType: 'submission_updated', targetUrl: WEBHOOK_URL })
+    expect(formbase.subscriptions.get(subscriptionId)).not.toHaveProperty('idleWindow')
+
+    // The edit arrives as a submission.updated envelope, passed through untouched.
+    const updated = formbase.buildEvent({ formId: 'form_live', type: 'submission.updated', answers: { company_name: 'Acme Ltd' }, display: { company_name: 'Acme Ltd' } })
+    const received = makeWebhookContext(activation.staticData, formbase.deliver(subscriptionId, updated))
+    expect(await trigger.webhook.call(received as never)).toEqual({ workflowData: [[{ json: updated }]] })
+
+    // A second node on Public Link Submission Created keeps its own subscription: the two events never replace each other.
+    const created = makeHookContext({ event: 'submission_created', staticData: {} })
+    expect(await trigger.webhookMethods.default.checkExists.call(created as never)).toBe(false)
+    expect(await trigger.webhookMethods.default.create.call(created as never)).toBe(true)
+    expect(formbase.subscriptions.has(subscriptionId)).toBe(true)
+    expect(formbase.subscriptions.size).toBe(2)
+
+    await formbase.subscriptions.clear()
+  })
+
   it('treats a subscription formbase already dropped as deleted', async () => {
     const trigger = new FormbaseTrigger()
     const ctx = makeHookContext({ staticData: { subscriptionId: 'int_gone', webhookSecret: 'x' } })

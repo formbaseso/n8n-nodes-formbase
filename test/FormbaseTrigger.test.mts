@@ -156,19 +156,23 @@ describe('formbase Trigger description', () => {
     const idleWindowProperty = trigger.description.properties.find((property) => property.name === 'idleWindow')
 
     expect(trigger.description.subtitle).toContain('On public link submission created')
+    expect(trigger.description.subtitle).toContain('On public link submission updated')
     expect(trigger.description.subtitle).toContain('On public link submission abandoned')
     expect(trigger.description.subtitle).toContain('On request completed')
     expect(eventProperty).toMatchObject({
       default: 'submission_created',
       options: [
         expect.objectContaining({ name: 'Public Link Submission Created', value: 'submission_created', action: 'On public link submission created' }),
+        expect.objectContaining({ name: 'Public Link Submission Updated', value: 'submission_updated', action: 'On public link submission updated' }),
         expect.objectContaining({ name: 'Public Link Submission Abandoned', value: 'submission_abandoned', action: 'On public link submission abandoned' }),
         expect.objectContaining({ name: 'Request Completed', value: 'request_completed', action: 'On request completed' }),
         expect.objectContaining({ name: 'Request Expired', value: 'request_expired', action: 'On request expired' }),
         expect.objectContaining({ name: 'Request Canceled', value: 'request_canceled', action: 'On request canceled' }),
       ],
     })
-    expect(eventProperty?.options?.[0]?.description).toContain('submission.updated')
+    expect(eventProperty?.options?.[0]?.description).toContain('submission.completed')
+    expect(eventProperty?.options?.[0]?.description).not.toContain('submission.updated')
+    expect(eventProperty?.options?.[1]?.description).toContain('submission.updated')
     expect(idleWindowProperty).toMatchObject({
       displayOptions: { show: { event: ['submission_abandoned'] } },
       default: '12h',
@@ -384,7 +388,7 @@ describe('FormbaseTrigger.webhookMethods.default.create', () => {
     expect(mockedRequest.mock.calls[0][2]).not.toHaveProperty('idleWindow')
   })
 
-  it.each(['request_completed', 'request_expired', 'request_canceled'])('registers %s with a signing secret and no idle window', async (event) => {
+  it.each(['submission_updated', 'request_completed', 'request_expired', 'request_canceled'])('registers %s with a signing secret and no idle window', async (event) => {
     const ctx = makeHookContext({ webhookUrl: 'https://n8n.example/hook/NEW', formId: 'f1', event, idleWindow: '3d' })
     respond(() => ({ subscriptionId: 'sub_new' }))
 

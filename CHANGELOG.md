@@ -2,10 +2,13 @@
 
 All notable changes to this project will be documented here.
 
-## 0.7.0 - 2026-09-23
+## 0.8.0 - 2026-09-23
 
-- The submission events are named **Public Link Submission Created** and **Public Link Submission Abandoned** and cover public-link submissions only. A completed request runs **Request Completed** alone and no longer runs a submission trigger on the same form (formbase ADR 0030, one channel, one event), so a workflow with both triggers runs once per completion, and a submission event never carries `data.request`. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
-- Shorter event descriptions; **Public Link Submission Created** says it also runs when the respondent updates the submission later.
+0.7.0 was never published to npm. 0.8.0 is the first release carrying its changes and the new updated-submission event.
+
+- **Behaviour change:** a workflow on **Public Link Submission Created** no longer runs when a respondent edits a submission they already sent. It now receives `submission.completed` only. To act on edits, add a trigger node on the new **Public Link Submission Updated** event, which subscribes to `submission_updated` and receives `submission.updated`. The form must allow editing after submit. Requests never produce an update event. Needs a formbase backend that accepts the `submission_updated` subscription event (formbase issue #229).
+- The submission events are named **Public Link Submission Created**, **Public Link Submission Updated** and **Public Link Submission Abandoned** and cover public-link submissions only. A completed request runs **Request Completed** alone and no longer runs a submission trigger on the same form (formbase ADR 0030, one channel, one event), so a workflow with both triggers runs once per completion, and a submission event never carries `data.request`. A workflow that wants every answer, whichever channel produced it, uses one trigger node on each event.
+- Shorter event descriptions.
 
 ## 0.6.0 - 2026-09-23
 
