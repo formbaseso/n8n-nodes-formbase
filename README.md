@@ -6,7 +6,7 @@ Community nodes for [n8n](https://n8n.io) that create [formbase](https://formbas
 
 - **formbase** node: create a request for a form and a recipient, with prefilled and read-only fields, context, reminders, expiry and delivery by email; get, cancel, remind, list requests; replay a request's callback.
 - Pause a workflow until the recipient answers: **Wait for the Outcome** points the request's callback at n8n's Wait node, so the workflow resumes with the completed, expired or canceled request as its input.
-- **formbase Trigger** node: start a workflow when a request is completed, expires or is canceled, or when a customer submits a form. `data.request` carries the request ID and the caller's `externalId` and `metadata`, so the workflow that created the request can pick up where it left off.
+- **formbase Trigger** node: start a workflow when a request is completed, expires or is canceled, or when a customer submits a form through its public link. `data.request` carries the request ID and the caller's `externalId` and `metadata`, so the workflow that created the request can pick up where it left off.
 - Trigger on abandoned submissions after a selected 12-hour, 1-day, 3-day, or 1-week idle window.
 - Load forms dynamically from the workspace the credential is scoped to, across every page.
 - Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.
@@ -42,7 +42,7 @@ Add **formbase** to a workflow, select the **Request** resource and an operation
 
 | Operation           | formbase method           | What it does                                                                                                                                                                                                 |
 | ------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Create**          | `requests.create`         | Creates a request for a published form. Returns the request summary, including the share link in `url`.                                                                                                     |
+| **Create**          | `requests.create`         | Creates a request for a published form. Returns the request summary, including the request link in `url`.                                                                                                     |
 | **Get**             | `requests.get`            | Reads one request: status, outcome, recipient, `answers` and `display` once it is completed.                                                                                                                 |
 | **Get Many**        | `requests.list`           | Lists the requests of a form or of the whole workspace, newest first, with status, outcome, external ID and test filters. **Return All** follows the cursor across every page; otherwise **Limit** caps it. |
 | **Cancel**          | `requests.cancel`         | Cancels a pending request, with an optional reason the recipient sees.                                                                                                                                       |
