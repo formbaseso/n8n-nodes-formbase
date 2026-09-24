@@ -122,6 +122,19 @@ describe('formbase node lifecycle', () => {
     expect(replayed).toEqual({ dispatchId: 'disp_req_1', eventId: 'evt_req_1' })
   })
 
+  it('titles the error with the formbase code and message, and names the cause underneath', async () => {
+    const body = { formId: 'form_live', recipientEmail: 'a@example.com', additionalFields: { delivery: 'none', externalId: 'run-conflict' } }
+    await runOperation({ operation: 'create', ...body })
+
+    await expect(runOperation({ operation: 'create', ...body, recipientEmail: 'b@example.com' })).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof NodeApiError &&
+        error.httpCode === '409' &&
+        error.message === 'CONFLICT: Idempotency key "run-conflict" was already used for a different request. Use a new key, or resend the original body.' &&
+        error.description === 'Reason: IDEMPOTENCY_CONFLICT. Field: idempotencyKey'
+    )
+  })
+
   it('surfaces an unpublished form as the formbase validation error', async () => {
     await expect(runOperation({ operation: 'create', formId: 'form_draft' })).rejects.toSatisfy(
       (error: unknown) => error instanceof NodeApiError && error.httpCode === '400' && error.description === 'FORM_NOT_PUBLISHED'

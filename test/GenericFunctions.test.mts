@@ -80,6 +80,34 @@ describe('formbaseApiRequest', () => {
     })
   })
 
+  it('unwraps the formbase error from a non-2xx, even when n8n throws it from its own copy of n8n-workflow', async () => {
+    const { ctx, httpRequestWithAuthentication } = makeContext(undefined)
+    // Not a NodeApiError from this package's n8n-workflow: only the shape n8n's helper gives it.
+    httpRequestWithAuthentication.mockRejectedValue({
+      message: 'Bad request - please check your parameters',
+      httpCode: '400',
+      context: {
+        data: {
+          ok: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'This form has 2 Documents blocks; name the target with "field".',
+            details: { reason: 'INVALID_DOCUMENT_TARGET', field: 'documents', validKeys: ['contract', 'price_list'] },
+          },
+        },
+      },
+    })
+
+    const error = await formbaseApiRequest(ctx as never, 'requests.create').catch((thrown: unknown) => thrown)
+
+    expect(error).toBeInstanceOf(NodeApiError)
+    expect(error).toMatchObject({
+      message: 'VALIDATION_ERROR: This form has 2 Documents blocks; name the target with "field".',
+      description: 'Reason: INVALID_DOCUMENT_TARGET. Field: documents. Valid keys: contract, price_list',
+      httpCode: '400',
+    })
+  })
+
   it('rejects malformed API responses', async () => {
     const { ctx } = makeContext({ success: true })
 

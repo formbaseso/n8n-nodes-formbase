@@ -40,7 +40,9 @@ export interface StoredRequest {
   cancelReason?: string
 }
 
-type RpcResult = { data: unknown } | { status: number; error: { code: string; message: string } }
+type RpcResult =
+  | { data: unknown }
+  | { status: number; error: { code: string; message: string; details?: { reason: string; field?: string; validKeys?: string[] } } }
 
 export interface FakeEventOptions {
   formId: string
@@ -219,7 +221,16 @@ export class FakeFormbase {
     if (params.idempotencyKey !== undefined) {
       const existing = [...this.requests.values()].find((request) => request.params.idempotencyKey === params.idempotencyKey)
       if (existing) {
-        if (JSON.stringify(existing.params) !== JSON.stringify(params)) return conflict('IDEMPOTENCY_CONFLICT')
+        if (JSON.stringify(existing.params) !== JSON.stringify(params)) {
+          return {
+            status: 409,
+            error: {
+              code: 'CONFLICT',
+              message: `Idempotency key "${String(params.idempotencyKey)}" was already used for a different request. Use a new key, or resend the original body.`,
+              details: { reason: 'IDEMPOTENCY_CONFLICT', field: 'idempotencyKey' },
+            },
+          }
+        }
         return { data: { ...requestSummary(existing), deduplicated: true } }
       }
     }
@@ -401,7 +412,12 @@ export function makeHelpers(baseUrl: string, accessToken = ACCESS_TOKEN) {
           body: JSON.stringify(options.body),
         })
         const body: unknown = await response.json()
-        if (!response.ok) throw new NodeApiError(NODE, body as never, { httpCode: String(response.status) })
+        // Like n8n's own helper: a non-2xx throws a NodeApiError built from the
+        // HTTP client's error, with the parsed body under `response.data`.
+        if (!response.ok) {
+          const clientError = { message: `Request failed with status code ${response.status}`, response: { status: response.status, data: body } }
+          throw new NodeApiError(NODE, clientError as never, { httpCode: String(response.status) })
+        }
         return body
       },
       returnJsonArray: (input: unknown) => [{ json: input }],
