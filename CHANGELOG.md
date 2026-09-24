@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented here.
 
-## Unreleased
+## 0.9.2 - 2026-09-25
 
 - The README documents booking and payment answers. Since event `apiVersion` `2026-09-24`, a Schedule appointment answer in `data.answers` is an object (`status`, `start`, `end`, `timeZone`, `attendee`, `meetingUrl`, `provider`, `providerBookingId`, `eventTitle`) instead of a sentence, and a Payment question has an answer of its own (`status`, `amount`, `currency`, `amountRefunded`, `receiptUrl`, `paidAt`, `refundedAt`, `disputedAt`, `provider`, `providerPaymentIntentId`). `data.display` keeps one line of text for each. The node passes the event through unchanged, so a workflow reads `{{ $json.data.answers.<field_key>.start }}` without a node change; one that read the booking as text reads `data.display.<field_key>` instead.
 
