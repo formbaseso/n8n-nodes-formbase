@@ -127,6 +127,8 @@ Each webhook produces one n8n item containing the formbase event envelope. Every
       "id": "sub_xyz789",
       "respondentEmail": "respondent@example.com",
       "submittedAt": "2026-04-25T12:34:56.000Z",
+      "updatedAt": null,
+      "editCount": 0,
       "pdfUrl": null,
       "language": "en"
     },
@@ -140,7 +142,7 @@ Read a value with `{{ $json.data.answers.recommend }}`; the field keys come from
 
 The node passes the envelope through unchanged — it does not flatten answers into the top level of the item. Nothing is dropped, every key stays where the formbase contract puts it, and a field key can never collide with an envelope key such as `type` or `test`. Map the handful of values a workflow needs with a Set node, as the example workflow does.
 
-A submission event carries no channel field; the event `type` already says it came through the public link. `submission.updated` keeps the original `submittedAt`, and the envelope's `createdAt` is the time of the edit.
+A submission event carries no channel field; the event `type` already says it came through the public link. `submission.updated` keeps the original `submittedAt`, and the envelope's `createdAt` is the time of the edit. `data.submission.updatedAt` is when the submission was last edited (`null` until the first edit), and `data.submission.editCount` counts the edits (`0` on a fresh submission).
 
 A submission event never carries `data.request`: a submission that answered a request arrives as a `request.completed` event instead. A response saved to PDF carries `data.submission.pdfUrl`; it is `null` when no PDF is kept. `test` is `true` for a test delivery, so a workflow can branch on it.
 
@@ -165,7 +167,7 @@ A request event carries the request itself in `data.request`: `id`, `status`, `o
       "completedAt": "2026-09-22T12:34:56.000Z"
     },
     "form": { "id": "frm_abc123", "name": "Vendor onboarding", "snapshotId": "snp_..." },
-    "submission": { "id": "sub_xyz789", "respondentEmail": "ada@acme.com", "submittedAt": "2026-09-22T12:34:56.000Z", "pdfUrl": null, "language": "en" },
+    "submission": { "id": "sub_xyz789", "respondentEmail": "ada@acme.com", "submittedAt": "2026-09-22T12:34:56.000Z", "updatedAt": null, "editCount": 0, "pdfUrl": null, "language": "en" },
     "answers": { "company_name": "Acme" },
     "display": { "company_name": "Acme" }
   }
