@@ -119,7 +119,7 @@ Each webhook produces one n8n item containing the formbase event envelope. Every
   "id": "evt_abc123",
   "type": "submission.completed",
   "createdAt": "2026-04-25T12:34:56.000Z",
-  "apiVersion": "2026-09-22",
+  "apiVersion": "2026-09-24",
   "test": false,
   "data": {
     "form": { "id": "frm_abc123", "name": "Customer Feedback", "snapshotId": "snp_..." },
@@ -132,13 +132,52 @@ Each webhook produces one n8n item containing the formbase event envelope. Every
       "pdfUrl": null,
       "language": "en"
     },
-    "answers": { "recommend": 9, "plan": "pro" },
-    "display": { "recommend": "9", "plan": "Pro" }
+    "answers": {
+      "recommend": 9,
+      "plan": "pro",
+      "book_a_call": {
+        "status": "confirmed",
+        "start": "2026-04-29T07:00:00.000Z",
+        "end": "2026-04-29T07:30:00.000Z",
+        "timeZone": "Europe/Oslo",
+        "attendee": { "name": "Grace Hopper", "email": "respondent@example.com" },
+        "meetingUrl": "https://app.cal.com/video/...",
+        "provider": "cal.com",
+        "providerBookingId": "...",
+        "eventTitle": "Intro call"
+      },
+      "pay_the_fee": {
+        "status": "paid",
+        "amount": 40,
+        "currency": "USD",
+        "amountRefunded": 0,
+        "receiptUrl": "https://pay.stripe.com/receipts/...",
+        "paidAt": "2026-04-25T12:30:00.000Z",
+        "refundedAt": null,
+        "disputedAt": null,
+        "provider": "stripe",
+        "providerPaymentIntentId": "pi_..."
+      }
+    },
+    "display": {
+      "recommend": "9",
+      "plan": "Pro",
+      "book_a_call": "Intro call · Apr 29, 2026, 9:00 AM - 9:30 AM (Europe/Oslo) · Grace Hopper <respondent@example.com> · https://app.cal.com/video/...",
+      "pay_the_fee": "$40.00 USD · Paid"
+    }
   }
 }
 ```
 
 Read a value with `{{ $json.data.answers.recommend }}`; the field keys come from `fields.list` (or the form's field Configure menu). A choice answer holds the readable option key (`"pro"`), and `display` holds its label (`"Pro"`). A repeating group is an array of row objects in `answers` and one joined line in `display`.
+
+A **Schedule appointment** answer and a **Payment** answer are objects, and `display` keeps one line of text for each. Read one property with `{{ $json.data.answers.book_a_call.start }}` or `{{ $json.data.answers.pay_the_fee.amount }}`.
+
+- A booking is `{ status, start, end, timeZone, attendee: { name, email }, meetingUrl, provider, providerBookingId, eventTitle }`. `status` is `confirmed`, `rescheduled`, `cancelled`, `rejected` or `no_show`. `start` and `end` are ISO 8601 instants. `meetingUrl` and `eventTitle` may be `null`.
+- A payment is `{ status, amount, currency, amountRefunded, receiptUrl, paidAt, refundedAt, disputedAt, provider, providerPaymentIntentId }`. `status` is `paid`, `partially_refunded`, `refunded` or `disputed`. `amount` and `amountRefunded` are in the currency's major unit (`40` is $40.00), `currency` is upper-case ISO 4217, and the timestamps are ISO 8601 or `null`.
+- formbase keeps both current: a rescheduled booking, a refund or a dispute rewrites the stored answer, so later events carry the new state. The change itself sends no event.
+
+Before event `apiVersion` `2026-09-24`, a booking arrived as one sentence and a payment question had no answer. A workflow that read the booking as text reads `data.display.<field_key>` instead.
 
 The node passes the envelope through unchanged — it does not flatten answers into the top level of the item. Nothing is dropped, every key stays where the formbase contract puts it, and a field key can never collide with an envelope key such as `type` or `test`. Map the handful of values a workflow needs with a Set node, as the example workflow does.
 
@@ -153,7 +192,7 @@ A request event carries the request itself in `data.request`: `id`, `status`, `o
   "id": "evt_req123",
   "type": "request.completed",
   "createdAt": "2026-09-22T12:34:56.000Z",
-  "apiVersion": "2026-09-22",
+  "apiVersion": "2026-09-24",
   "test": false,
   "data": {
     "request": {

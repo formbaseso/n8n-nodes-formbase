@@ -304,7 +304,7 @@ export class FakeFormbase {
         id: `evt_${Math.random().toString(16).slice(2, 14)}`,
         type: options.type,
         createdAt: '2026-09-22T10:00:00.000Z',
-        apiVersion: '2026-09-22',
+        apiVersion: '2026-09-24',
         test: false,
         data: { request },
       }
@@ -322,7 +322,7 @@ export class FakeFormbase {
       id: test ? 'evt_example000000000000' : `evt_${Math.random().toString(16).slice(2, 14)}`,
       type: options.type ?? 'submission.completed',
       createdAt: '2026-09-22T10:00:00.000Z',
-      apiVersion: '2026-09-22',
+      apiVersion: '2026-09-24',
       test,
       data: {
         form: { id: form.id, name: form.name, snapshotId: form.published ? `snap_${form.id}` : null },

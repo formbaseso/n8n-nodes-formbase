@@ -85,7 +85,7 @@ function makeEventBody(type: string): Record<string, unknown> {
     id: 'evt_abc123',
     type,
     createdAt: '2026-09-22T12:34:56.000Z',
-    apiVersion: '2026-09-22',
+    apiVersion: '2026-09-24',
     test: false,
     data: {
       form: { id: 'frm_abc123', name: 'Customer Feedback', snapshotId: 'snp_1' },
@@ -126,7 +126,7 @@ function makeRequestEventBody(type: string): Record<string, unknown> {
           display: { company_name: 'Acme' },
         }
       : {}
-  return { id: 'evt_req123', type, createdAt: '2026-09-22T12:34:56.000Z', apiVersion: '2026-09-22', test: false, data: { request, ...completion } }
+  return { id: 'evt_req123', type, createdAt: '2026-09-22T12:34:56.000Z', apiVersion: '2026-09-24', test: false, data: { request, ...completion } }
 }
 
 const subscription = (overrides: Record<string, unknown>) => ({
@@ -496,6 +496,48 @@ describe('FormbaseTrigger.webhook', () => {
     expect(data.display).toEqual({ recommend: '9', plan: 'Pro', contacts: 'Ada' })
     expect(data.unknownBlock).toEqual({ id: 'blk_1', label: 'later' })
     expect(item).not.toHaveProperty('fields')
+  })
+
+  it('passes a booking and a payment answer through as objects, with their text under display', async () => {
+    const booking = {
+      status: 'confirmed',
+      start: '2026-09-29T07:00:00.000Z',
+      end: '2026-09-29T07:30:00.000Z',
+      timeZone: 'Europe/Oslo',
+      attendee: { name: 'Grace Hopper', email: 'grace@example.com' },
+      meetingUrl: 'https://app.cal.com/video/example',
+      provider: 'cal.com',
+      providerBookingId: 'booking_1',
+      eventTitle: 'Intro call',
+    }
+    const payment = {
+      status: 'paid',
+      amount: 40,
+      currency: 'USD',
+      amountRefunded: 0,
+      receiptUrl: 'https://pay.stripe.com/receipts/example',
+      paidAt: '2026-09-24T10:12:00.000Z',
+      refundedAt: null,
+      disputedAt: null,
+      provider: 'stripe',
+      providerPaymentIntentId: 'pi_1',
+    }
+    const body = makeEventBody('submission.completed')
+    const eventData = body.data as Record<string, Record<string, unknown>>
+    body.data = {
+      ...eventData,
+      answers: { ...eventData.answers, book_a_call: booking, pay_the_fee: payment },
+      display: { ...eventData.display, book_a_call: 'Intro call · Sep 29, 2026, 9:00 AM - 9:30 AM (Europe/Oslo)', pay_the_fee: '$40.00 USD · Paid' },
+    }
+    const rawBody = JSON.stringify(body)
+    const ctx = makeWebhookContext({ body, secret: SECRET, rawBody, signatureHeader: signEvent(SECRET, Math.floor(Date.now() / 1000), rawBody) })
+
+    const result = await new FormbaseTrigger().webhook.call(ctx as never)
+    const data = (result.workflowData?.[0]?.[0]?.json as Record<string, Record<string, unknown>>).data
+
+    expect(data.answers.book_a_call).toEqual(booking)
+    expect(data.answers.pay_the_fee).toEqual(payment)
+    expect(data.display.pay_the_fee).toBe('$40.00 USD · Paid')
   })
 
   it.each([
