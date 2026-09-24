@@ -503,6 +503,17 @@ describe('Formbase.execute: get many', () => {
 })
 
 describe('Formbase.execute: errors', () => {
+  it('rethrows an n8n error unchanged when it comes from another copy of n8n-workflow', async () => {
+    // n8n's own helpers throw errors built by its own n8n-workflow, which
+    // `instanceof` against the copy this package ships does not recognize.
+    const foreignError = { name: 'NodeApiError', node: NODE, message: 'Payload too large', httpCode: '413' }
+    mockedRequest.mockImplementation(() => {
+      throw foreignError
+    })
+
+    await expect(run([{ resource: 'request', operation: 'get', requestId: 'req_1' }])).rejects.toBe(foreignError)
+  })
+
   it('stops on the first failing item by default', async () => {
     mockedRequest.mockImplementation(() => {
       throw new NodeApiError(NODE, { message: 'Request not found' }, { httpCode: '404' })

@@ -433,6 +433,16 @@ describe('FormbaseTrigger.webhookMethods.default.delete', () => {
     expect(ctx._staticData.subscriptionId).toBeUndefined()
   })
 
+  it('treats a 404 from another copy of n8n-workflow as already deleted', async () => {
+    const ctx = makeHookContext({ staticData: { subscriptionId: 'sub_gone' } })
+    mockedRequest.mockImplementation(() => {
+      throw { name: 'NodeApiError', node: NODE, message: 'Webhook not found', httpCode: '404' }
+    })
+
+    expect(await new FormbaseTrigger().webhookMethods.default.delete.call(ctx as never)).toBe(true)
+    expect(ctx._staticData.subscriptionId).toBeUndefined()
+  })
+
   it('retains the subscription ID and reports failure on other API errors', async () => {
     const ctx = makeHookContext({ staticData: { subscriptionId: 'sub_retry' } })
     mockedRequest.mockImplementation(() => {

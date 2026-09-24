@@ -8,7 +8,7 @@ import type {
   IWebhookFunctions,
   IWebhookResponseData,
 } from 'n8n-workflow'
-import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow'
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow'
 
 import {
   FORMBASE_IDLE_WINDOW_OPTIONS,
@@ -21,6 +21,7 @@ import {
 import { listForms, type ListResponse } from './FormbaseCatalog'
 import { createFormbaseWebhookSecret, verifyFormbaseWebhookSignature } from './FormbaseWebhookSignature'
 import { formbaseApiRequest } from './GenericFunctions'
+import { isNodeError } from './NodeErrors'
 
 /** One row of `webhooks.list`. */
 interface WebhookSubscription {
@@ -269,7 +270,7 @@ export class FormbaseTrigger implements INodeType {
           await formbaseApiRequest(this, 'webhooks.delete', { subscriptionId })
         } catch (error: unknown) {
           // Already gone on the formbase side is the outcome we wanted.
-          if (!(error instanceof NodeApiError) || error.httpCode !== '404') return false
+          if (!isNodeError(error) || error.name !== 'NodeApiError' || error.httpCode !== '404') return false
         }
         clearWebhookRegistration(webhookData)
         return true

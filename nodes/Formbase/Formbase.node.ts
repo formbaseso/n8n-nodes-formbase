@@ -9,11 +9,12 @@ import type {
   INodeType,
   INodeTypeDescription,
 } from 'n8n-workflow'
-import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow'
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow'
 
 import { FORMBASE_OAUTH2_CREDENTIAL_NAME } from './constants'
 import { collectPages, listFields, listForms, readWorkspace, type FormField } from './FormbaseCatalog'
 import { formbaseApiRequest } from './GenericFunctions'
+import { isNodeError } from './NodeErrors'
 
 type RequestOperation = 'cancel' | 'create' | 'get' | 'getAll' | 'remind' | 'replayCallback'
 
@@ -902,8 +903,7 @@ export class Formbase implements INodeType {
           continue
         }
         // formbase errors already carry their code and message; anything else gets the failing item.
-        const known = error instanceof NodeApiError || error instanceof NodeOperationError
-        throw known ? error : new NodeOperationError(this.getNode(), error as Error, { itemIndex })
+        throw isNodeError(error) ? error : new NodeOperationError(this.getNode(), error as Error, { itemIndex })
       }
     }
 

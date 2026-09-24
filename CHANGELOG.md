@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented here.
 
+## Unreleased
+
+- An error thrown by one of n8n's own helpers, such as a failed document upload, keeps its HTTP status code. The node recognized n8n errors with `instanceof`, which fails for errors built by n8n's copy of n8n-workflow, so it wrapped them in a new error without the code. It now recognizes them by their shape and rethrows them unchanged. Deactivating a trigger whose subscription formbase already deleted uses the same check. (#2)
+
 ## 0.9.0 - 2026-09-24
 
 - **Documents** on **Create**: attach files from the input item's binary fields to the request. The node reserves each file with `documents.create`, uploads it to the presigned URL, and passes the documents to `requests.create`, which checks their size and sha256. A form with several Documents blocks takes the target block from a picker.
