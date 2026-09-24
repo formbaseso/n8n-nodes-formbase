@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type {
   IDataObject,
   IExecuteFunctions,
@@ -20,6 +22,19 @@ interface KeyValuePair {
   key?: string
   value?: unknown
   json?: boolean
+}
+
+/** One row of the documents collection: a binary field of the input item and where it goes. */
+interface DocumentRow {
+  binaryProperty?: string
+  name?: string
+  field?: string
+}
+
+/** What `documents.create` answers: the reserved document and the presigned URL its bytes go to. */
+interface ReservedDocument {
+  id: string
+  uploadUrl: string
 }
 
 interface CreateAdditionalFields {
@@ -121,8 +136,52 @@ function readResumeUrl(context: IExecuteFunctions, itemIndex: number): string {
   return resumeUrl
 }
 
+/**
+ * Upload the input item's files named in the documents collection and return
+ * the `documents` entries `requests.create` takes. formbase reserves each
+ * document with `documents.create` and hands back a presigned URL; the bytes
+ * go straight to storage and `requests.create` verifies them against the
+ * declared size and sha256.
+ */
+async function uploadDocuments(
+  context: IExecuteFunctions,
+  formId: string,
+  itemIndex: number
+): Promise<Array<Record<string, string>>> {
+  const collection = context.getNodeParameter('documents', itemIndex, {}) as { values?: DocumentRow[] }
+  const documents: Array<Record<string, string>> = []
+  for (const row of collection.values ?? []) {
+    const binaryProperty = row.binaryProperty?.trim()
+    if (!binaryProperty) {
+      throw new NodeOperationError(context.getNode(), 'Every document needs the name of an input binary field', { itemIndex })
+    }
+    const binary = context.helpers.assertBinaryData(itemIndex, binaryProperty)
+    const bytes = await context.helpers.getBinaryDataBuffer(itemIndex, binaryProperty)
+    const name = row.name?.trim() || binary.fileName
+    if (!name) {
+      throw new NodeOperationError(context.getNode(), `The file in "${binaryProperty}" has no file name; set a Name for it`, { itemIndex })
+    }
+
+    const reserved = await formbaseApiRequest<ReservedDocument>(context, 'documents.create', {
+      formId,
+      name,
+      contentType: binary.mimeType,
+      size: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    })
+    await context.helpers.httpRequest({
+      method: 'PUT',
+      url: reserved.uploadUrl,
+      body: bytes,
+      headers: { 'Content-Type': binary.mimeType },
+    })
+    documents.push({ documentId: reserved.id, ...(row.field ? { field: row.field } : {}) })
+  }
+  return documents
+}
+
 /** The `requests.create` params the node's parameters describe for one item. */
-function buildCreateParams(context: IExecuteFunctions, itemIndex: number): Record<string, unknown> {
+async function buildCreateParams(context: IExecuteFunctions, itemIndex: number): Promise<Record<string, unknown>> {
   const formId = context.getNodeParameter('formId', itemIndex) as string
   const recipientEmail = context.getNodeParameter('recipientEmail', itemIndex, '') as string
   const readonly = context.getNodeParameter('readonly', itemIndex, []) as string[]
@@ -141,6 +200,9 @@ function buildCreateParams(context: IExecuteFunctions, itemIndex: number): Recor
   const prefill = readPairs(context, 'prefill', itemIndex)
   const requestContext = readPairs(context, 'context', itemIndex)
   const metadata = readMetadata(context, additional.metadata, itemIndex)
+  const expiresAt = additional.expiresAt ? readExpiresAt(context, additional.expiresAt, itemIndex) : undefined
+  // Last, so a parameter mistake above never leaves an uploaded document behind.
+  const documents = await uploadDocuments(context, formId, itemIndex)
   const recipient = {
     ...(recipientEmail ? { email: recipientEmail } : {}),
     ...(additional.recipientName ? { name: additional.recipientName } : {}),
@@ -152,10 +214,11 @@ function buildCreateParams(context: IExecuteFunctions, itemIndex: number): Recor
     ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
     ...(Object.keys(requestContext).length > 0 ? { context: requestContext } : {}),
     ...(readonly.length > 0 ? { readonly } : {}),
+    ...(documents.length > 0 ? { documents } : {}),
     ...(additional.language ? { language: additional.language } : {}),
     ...(additional.delivery ? { delivery: additional.delivery } : {}),
     ...(additional.reminders !== undefined ? { reminders: readReminders(additional.reminders) } : {}),
-    ...(additional.expiresAt ? { expiresAt: readExpiresAt(context, additional.expiresAt, itemIndex) } : {}),
+    ...(expiresAt !== undefined ? { expiresAt } : {}),
     ...(additional.externalId ? { externalId: additional.externalId, idempotencyKey: additional.externalId } : {}),
     ...(metadata ? { metadata } : {}),
     ...(callbackUrl ? { callbackUrl } : {}),
@@ -194,7 +257,7 @@ async function runOperation(
   itemIndex: number
 ): Promise<IDataObject | IDataObject[]> {
   if (operation === 'create') {
-    return formbaseApiRequest<IDataObject>(context, 'requests.create', buildCreateParams(context, itemIndex))
+    return formbaseApiRequest<IDataObject>(context, 'requests.create', await buildCreateParams(context, itemIndex))
   }
   if (operation === 'getAll') return listRequests(context, itemIndex)
 
@@ -449,6 +512,59 @@ export class Formbase implements INodeType {
         default: [],
         description:
           'Prefilled fields the recipient may see but not change. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+      },
+      {
+        displayName: 'Documents',
+        name: 'documents',
+        type: 'fixedCollection',
+        placeholder: 'Add Document',
+        typeOptions: {
+          multipleValues: true,
+        },
+        displayOptions: {
+          show: {
+            resource: ['request'],
+            operation: ['create'],
+          },
+        },
+        default: {},
+        description:
+          'Files from the input item the recipient gets in the form\'s Documents block, below the documents the form already has. PDF or image, up to 25 MB each.',
+        options: [
+          {
+            name: 'values',
+            displayName: 'Document',
+            values: [
+              {
+                displayName: 'Input Binary Field',
+                name: 'binaryProperty',
+                type: 'string',
+                default: 'data',
+                required: true,
+                hint: 'The name of the input binary field containing the file',
+              },
+              {
+                displayName: 'Name',
+                name: 'name',
+                type: 'string',
+                default: '',
+                description: 'The name the recipient sees. Defaults to the file name.',
+              },
+              {
+                displayName: 'Documents Block Name or ID',
+                name: 'field',
+                type: 'options',
+                typeOptions: {
+                  loadOptionsMethod: 'getDocumentsKeys',
+                  loadOptionsDependsOn: ['formId'],
+                },
+                default: '',
+                description:
+                  'The Documents block the file goes into. Leave empty when the form has one. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+              },
+            ],
+          },
+        ],
       },
       {
         displayName: 'Wait for the Outcome',
@@ -750,6 +866,13 @@ export class Formbase implements INodeType {
         if (typeof formId !== 'string' || !formId) return []
         const fields = await listFields(this, formId)
         return fields.filter(isPrefillable).map(fieldOption)
+      },
+
+      async getDocumentsKeys(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+        const formId = this.getCurrentNodeParameter('formId')
+        if (typeof formId !== 'string' || !formId) return []
+        const fields = await listFields(this, formId)
+        return fields.filter((field) => field.type === 'documents').map(fieldOption)
       },
 
       async getContextKeys(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {

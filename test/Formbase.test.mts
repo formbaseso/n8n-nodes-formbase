@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { NodeApiError, NodeOperationError } from 'n8n-workflow'
 
@@ -39,7 +40,19 @@ function sentParams(method: string): Record<string, unknown> {
  * An IExecuteFunctions stand-in: one item per entry of `parameters`, each
  * entry naming the node parameters for that item.
  */
-function makeExecuteContext(parameters: Array<Record<string, unknown>>, options: { resumeUrl?: string; continueOnFail?: boolean } = {}) {
+interface ExecuteOptions {
+  resumeUrl?: string
+  continueOnFail?: boolean
+  /** Binary fields of every input item, by field name. */
+  binary?: Record<string, { mimeType: string; fileName?: string; bytes: Buffer }>
+}
+
+function makeExecuteContext(parameters: Array<Record<string, unknown>>, options: ExecuteOptions = {}) {
+  const binaryField = (name: string) => {
+    const file = options.binary?.[name]
+    if (!file) throw new NodeOperationError(NODE as never, `This operation expects the node's input data to contain a binary file '${name}'`)
+    return file
+  }
   return {
     getInputData: vi.fn().mockReturnValue(parameters.map(() => ({ json: {} }))),
     getNodeParameter: vi.fn((name: string, itemIndex: number, fallback?: unknown) => {
@@ -50,6 +63,12 @@ function makeExecuteContext(parameters: Array<Record<string, unknown>>, options:
     continueOnFail: vi.fn().mockReturnValue(options.continueOnFail ?? false),
     getNode: vi.fn().mockReturnValue(NODE),
     helpers: {
+      assertBinaryData: vi.fn((_itemIndex: number, name: string) => {
+        const { mimeType, fileName } = binaryField(name)
+        return { mimeType, fileName, data: '' }
+      }),
+      getBinaryDataBuffer: vi.fn(async (_itemIndex: number, name: string) => binaryField(name).bytes),
+      httpRequest: vi.fn().mockResolvedValue(''),
       returnJsonArray: (input: unknown) => (Array.isArray(input) ? input : [input]).map((json) => ({ json })),
       constructExecutionMetaData: (items: Array<{ json: unknown }>, { itemData }: { itemData: { item: number } }) =>
         items.map((item) => ({ ...item, pairedItem: itemData })),
@@ -64,10 +83,16 @@ function makeLoadOptionsContext(currentParameters: Record<string, unknown> = {})
   }
 }
 
-async function run(parameters: Array<Record<string, unknown>>, options?: { resumeUrl?: string; continueOnFail?: boolean }) {
+async function run(parameters: Array<Record<string, unknown>>, options?: ExecuteOptions) {
   const ctx = makeExecuteContext(parameters, options)
   const [items] = await new Formbase().execute.call(ctx as never)
   return items
+}
+
+async function runWithContext(parameters: Array<Record<string, unknown>>, options?: ExecuteOptions) {
+  const ctx = makeExecuteContext(parameters, options)
+  const [items] = await new Formbase().execute.call(ctx as never)
+  return { items, ctx }
 }
 
 const CREATE = { resource: 'request', operation: 'create', formId: 'form_1' }
@@ -165,6 +190,19 @@ describe('Formbase.methods.loadOptions', () => {
     ])
     expect(await node.methods.loadOptions.getContextKeys.call(ctx as never)).toEqual([{ name: 'Case (case_id)', value: 'case_id' }])
     calledWith('fields.list', { formId: 'form_1' })
+  })
+
+  it('offers the Documents blocks for documents', async () => {
+    respond(() => ({
+      published: true,
+      items: [...fields, { key: 'contract_documents', type: 'documents', title: 'Your contract', prefillable: false }],
+      hasMore: false,
+    }))
+    const ctx = makeLoadOptionsContext({ formId: 'form_1' })
+
+    expect(await new Formbase().methods.loadOptions.getDocumentsKeys.call(ctx as never)).toEqual([
+      { name: 'Your contract (contract_documents)', value: 'contract_documents' },
+    ])
   })
 
   it('offers nothing until a form is selected', async () => {
@@ -297,6 +335,79 @@ describe('Formbase.execute: create', () => {
     await run([{ ...CREATE, additionalFields: { reminders: '', metadata: { ticket: 7 } } }])
 
     expect(sentParams('requests.create')).toEqual({ formId: 'form_1', reminders: [], metadata: { ticket: 7 } })
+  })
+
+  it('uploads each input file as a document and hands it to the request', async () => {
+    const pdf = Buffer.from('%PDF-1.7 lease')
+    const png = Buffer.from('\x89PNG floor plan')
+    let reserved = 0
+    respond((method) => {
+      if (method === 'documents.create') {
+        reserved += 1
+        return { id: `doc_${reserved}`, uploadUrl: `https://r2.example/upload/${reserved}` }
+      }
+      return { id: 'req_1' }
+    })
+
+    const { ctx } = await runWithContext(
+      [
+        {
+          ...CREATE,
+          documents: {
+            values: [
+              { binaryProperty: 'data', name: '' },
+              { binaryProperty: 'plan', name: 'Floor plan', field: 'appendix' },
+            ],
+          },
+        },
+      ],
+      {
+        binary: {
+          data: { mimeType: 'application/pdf', fileName: 'lease.pdf', bytes: pdf },
+          plan: { mimeType: 'image/png', fileName: 'plan.png', bytes: png },
+        },
+      }
+    )
+
+    calledWith('documents.create', {
+      formId: 'form_1',
+      name: 'lease.pdf',
+      contentType: 'application/pdf',
+      size: pdf.length,
+      sha256: createHash('sha256').update(pdf).digest('hex'),
+    })
+    calledWith('documents.create', {
+      formId: 'form_1',
+      name: 'Floor plan',
+      contentType: 'image/png',
+      size: png.length,
+      sha256: createHash('sha256').update(png).digest('hex'),
+    })
+    expect(ctx.helpers.httpRequest).toHaveBeenCalledWith({
+      method: 'PUT',
+      url: 'https://r2.example/upload/1',
+      body: pdf,
+      headers: { 'Content-Type': 'application/pdf' },
+    })
+    expect(ctx.helpers.httpRequest).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://r2.example/upload/2', body: png }))
+    expect(sentParams('requests.create')).toEqual({
+      formId: 'form_1',
+      documents: [{ documentId: 'doc_1' }, { documentId: 'doc_2', field: 'appendix' }],
+    })
+  })
+
+  it('fails on a missing binary field before reserving anything', async () => {
+    await expect(run([{ ...CREATE, documents: { values: [{ binaryProperty: 'data' }] } }])).rejects.toBeInstanceOf(NodeOperationError)
+    expect(mockedRequest).not.toHaveBeenCalled()
+  })
+
+  it('uploads nothing when another parameter is wrong', async () => {
+    await expect(
+      run([{ ...CREATE, additionalFields: { expiresAt: 'tomorrow' }, documents: { values: [{ binaryProperty: 'data' }] } }], {
+        binary: { data: { mimeType: 'application/pdf', fileName: 'lease.pdf', bytes: Buffer.from('%PDF') } },
+      })
+    ).rejects.toBeInstanceOf(NodeOperationError)
+    expect(mockedRequest).not.toHaveBeenCalled()
   })
 
   it.each([
