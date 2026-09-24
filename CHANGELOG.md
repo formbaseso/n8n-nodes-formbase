@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here.
 
+## Unreleased
+
+- **Documents** on **Create**: attach files from the input item's binary fields to the request. The node reserves each file with `documents.create`, uploads it to the presigned URL, and passes the documents to `requests.create`, which checks their size and sha256. A form with several Documents blocks takes the target block from a picker.
+- Errors show the formbase code and message, such as `CONFLICT: Idempotency key "run-42" was already used for a different request...`, instead of n8n's generic "Bad request - please check your parameters". The description lists the reason, the parameter and the valid keys when formbase gives them. Before, only an error returned with HTTP 200 was unwrapped; every error from the formbase API now is.
+- The README documents errors, Remind on requests without email delivery, the millisecond timestamps of Get and Get Many, and the `decision` field key behind `outcome`.
+
 ## 0.8.0 - 2026-09-23
 
 0.7.0 was never published to npm. 0.8.0 is the first release carrying its changes and the new updated-submission event.

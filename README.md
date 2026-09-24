@@ -56,8 +56,9 @@ Add **formbase** to a workflow, select the **Request** resource and an operation
 3. Under **Prefill**, add one entry per field key and value. The key picker loads the form's prefillable fields; turn on **Parse as JSON** for a value that is not plain text, such as a repeating group's rows or a number.
 4. Under **Context**, add values for the form's context fields: they are stored with the request and returned with the answers, but the recipient never sees them.
 5. Under **Read-Only Fields**, pick the prefilled fields the recipient may see but not change.
-6. In **Additional Fields**, set **Delivery** to `Email` to have formbase send the link, **Reminders** such as `2d, 5d` (leave the field empty to send none; remove it to inherit the form's schedule), **Expires At**, **Language**, **Recipient Name**, **Metadata** (a JSON object handed back with every event), **Test Mode**, or a **Callback URL** of your own.
-7. Set **External ID** to your own identifier, for example `{{ $execution.id }}`. The node also sends it as the request's `idempotencyKey`, so a retried execution gets the same request back (`deduplicated: true`) instead of creating a second one.
+6. Under **Documents**, add the files the recipient should read or download, such as a contract or a price list. Each entry names an **Input Binary Field** of the incoming item (a file from an HTTP Request, Google Drive or Read Binary File node), an optional **Name** the recipient sees, and the **Documents Block** it goes into. The form needs a Documents block; leave the block empty when the form has one, and pick it when the form has several. Files are PDFs or images of up to 25 MB. The node uploads each file before it creates the request, and the recipient sees them below the documents the form already has.
+7. In **Additional Fields**, set **Delivery** to `Email` to have formbase send the link, **Reminders** such as `2d, 5d` (leave the field empty to send none; remove it to inherit the form's schedule), **Expires At**, **Language**, **Recipient Name**, **Metadata** (a JSON object handed back with every event), **Test Mode**, or a **Callback URL** of your own.
+8. Set **External ID** to your own identifier, for example `{{ $execution.id }}`. The node also sends it as the request's `idempotencyKey`, so a retried execution gets the same request back (`deduplicated: true`) instead of creating a second one.
 
 Every request also carries `formId`, `status`, `url`, `externalId`, `isTest`, `deliveryStatus`, `hasCallback`, `remindersSent`, `expiresAt` and `createdAt` in its summary.
 
@@ -75,6 +76,17 @@ A request is answered minutes or days later. To pause the workflow until then:
 A resume URL only exists once the execution runs, so the test run of a Create node in the editor waits for a real answer just like a production run. Give the request an **Expires At** or a **Reminders** schedule so a forgotten request does not hold the execution open forever; an expired request resumes the workflow with `request.expired`. If n8n was unreachable when the callback fired, run **Replay Callback** for the request, or read it with **Get**: the resume URL of a finished execution is gone, so a replay only helps while the execution is still waiting.
 
 The Wait node cannot check the `X-formbase-Signature` header that the callback carries. The resume URL is unguessable, which is what n8n relies on for every Wait node; if that is not enough for a workflow, use the trigger node instead, which verifies every delivery.
+
+### Errors
+
+A failed call stops the node with the formbase error code and message as its title, for example `CONFLICT: Idempotency key "run-42" was already used for a different request. Use a new key, or resend the original body.` or `VALIDATION_ERROR: This form has 2 Documents blocks; name the target with "field".` The error description names the specific cause when formbase gives one: the reason code, the parameter it concerns, and the keys that would have worked. With **Continue on Fail** on, the same text arrives in the item's `error` field, so a workflow can branch on the code.
+
+Things worth knowing:
+
+- **Remind** always emails the recipient, including a request created with **Delivery** set to `None`, so it needs a request with a recipient email. formbase refuses a reminder sent less than 10 minutes after the previous one, and sends at most eight per request.
+- **Get** and **Get Many** return timestamps (`createdAt`, `expiresAt`, `completedAt`) as Unix time in milliseconds; webhook and callback events use ISO 8601 strings.
+- `outcome` is only set when the form has a decision question with the field key `decision`.
+- A retried **Create** with the same **External ID** and the same parameters returns the first request with `deduplicated: true`. With different parameters it fails with `CONFLICT`.
 
 ## Use the trigger
 
@@ -127,6 +139,8 @@ Each webhook produces one n8n item containing the formbase event envelope. Every
 Read a value with `{{ $json.data.answers.recommend }}`; the field keys come from `fields.list` (or the form's field Configure menu). A choice answer holds the readable option key (`"pro"`), and `display` holds its label (`"Pro"`). A repeating group is an array of row objects in `answers` and one joined line in `display`.
 
 The node passes the envelope through unchanged — it does not flatten answers into the top level of the item. Nothing is dropped, every key stays where the formbase contract puts it, and a field key can never collide with an envelope key such as `type` or `test`. Map the handful of values a workflow needs with a Set node, as the example workflow does.
+
+A submission event carries no channel field; the event `type` already says it came through the public link. `submission.updated` keeps the original `submittedAt`, and the envelope's `createdAt` is the time of the edit.
 
 A submission event never carries `data.request`: a submission that answered a request arrives as a `request.completed` event instead. A response saved to PDF carries `data.submission.pdfUrl`; it is `null` when no PDF is kept. `test` is `true` for a test delivery, so a workflow can branch on it.
 
