@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented here.
 
-## Unreleased
+## 0.9.1 - 2026-09-24
 
 - The README lists `data.submission.updatedAt` and `data.submission.editCount`, which submission and request events now carry: when the submission was last edited (`null` until the first edit) and how many times (`0` on a fresh submission). They reach a workflow without a node change, since the node passes the event through unchanged.
 - An error thrown by one of n8n's own helpers, such as a failed document upload, keeps its HTTP status code. The node recognized n8n errors with `instanceof`, which fails for errors built by n8n's copy of n8n-workflow, so it wrapped them in a new error without the code. It now recognizes them by their shape and rethrows them unchanged. Deactivating a trigger whose subscription formbase already deleted uses the same check. (#2)
