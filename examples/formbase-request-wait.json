@@ -13,19 +13,31 @@
       "parameters": {
         "resource": "request",
         "operation": "create",
-        "formId": "",
-        "recipientEmail": "ada@acme.com",
-        "prefill": {
-          "values": [
-            {
-              "key": "company_name",
-              "value": "Acme",
-              "json": false
-            }
-          ]
+        "formId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
         },
-        "context": {
-          "values": []
+        "recipientEmail": "ada@acme.com",
+        "fields": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "company_name": "Acme"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "company_name",
+              "displayName": "Company (company_name)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "readonly": ["company_name"],
         "waitForOutcome": true,
@@ -36,7 +48,7 @@
         }
       },
       "type": "n8n-nodes-formbase.formbase",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [240, 0],
       "id": "b7d2f3a4-8c1e-4a5b-9d6f-0e2c4a6b8d21",
       "name": "Create request"

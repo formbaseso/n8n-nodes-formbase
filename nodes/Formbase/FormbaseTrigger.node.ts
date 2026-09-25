@@ -1,7 +1,6 @@
 import type {
   IDataObject,
   IHookFunctions,
-  ILoadOptionsFunctions,
   INodePropertyOptions,
   INodeType,
   INodeTypeDescription,
@@ -12,16 +11,62 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow'
 
 import {
   FORMBASE_IDLE_WINDOW_OPTIONS,
-  FORMBASE_OAUTH2_CREDENTIAL_NAME,
+  FORMBASE_CREDENTIAL_TYPE,
   FORMBASE_WEBHOOK_EVENTS,
   isFormbaseIdleWindow,
   type FormbaseIdleWindow,
   type FormbaseWebhookEvent,
 } from './constants'
-import { listForms, type ListResponse } from './FormbaseCatalog'
+import type { ListResponse } from './FormbaseCatalog'
+import { getForms } from './FormbaseMethods'
 import { createFormbaseWebhookSecret, verifyFormbaseWebhookSignature } from './FormbaseWebhookSignature'
 import { formbaseApiRequest } from './GenericFunctions'
 import { isNodeError } from './NodeErrors'
+
+/**
+ * The events the trigger subscribes to, default first. Each option's action
+ * doubles as the node's subtitle, so the two can never disagree.
+ */
+const EVENT_OPTIONS: INodePropertyOptions[] = [
+  {
+    name: 'Public Link Submission Created',
+    value: FORMBASE_WEBHOOK_EVENTS.submissionCreated,
+    description:
+      'Runs when a respondent submits the selected form through its public link (event type submission.completed). An edit after submit runs Public Link Submission Updated; a completed request runs Request Completed.',
+  },
+  {
+    name: 'Public Link Submission Updated',
+    value: FORMBASE_WEBHOOK_EVENTS.submissionUpdated,
+    description:
+      'Runs when a respondent edits a public-link submission they already sent (event type submission.updated). The form must allow editing after submit.',
+  },
+  {
+    name: 'Public Link Submission Abandoned',
+    value: FORMBASE_WEBHOOK_EVENTS.submissionAbandoned,
+    description:
+      'Runs when a respondent leaves the selected form, opened through its public link, without submitting it. Needs partial-submission tracking on the workspace.',
+  },
+  {
+    name: 'Request Completed',
+    value: FORMBASE_WEBHOOK_EVENTS.requestCompleted,
+    description:
+      'Runs when a recipient completes a request for the selected form, with the answers and the outcome (event type request.completed)',
+  },
+  {
+    name: 'Request Expired',
+    value: FORMBASE_WEBHOOK_EVENTS.requestExpired,
+    description: 'Runs when a request for the selected form reaches its expiry without being completed',
+  },
+  {
+    name: 'Request Canceled',
+    value: FORMBASE_WEBHOOK_EVENTS.requestCanceled,
+    description: 'Runs when a request for the selected form is canceled, with the reason when one was given',
+  },
+].map((option) => ({ ...option, action: `On ${option.name.toLowerCase()}` }))
+
+const EVENT_SUBTITLE = `={{ (${JSON.stringify(
+  Object.fromEntries(EVENT_OPTIONS.map((option) => [option.value, option.action]))
+)})[$parameter["event"]] }}`
 
 /** One row of `webhooks.list`. */
 interface WebhookSubscription {
@@ -76,7 +121,6 @@ function clearWebhookRegistration(webhookData: IDataObject): void {
   delete webhookData.webhookSecret
 }
 
-/* eslint-disable @n8n/community-nodes/node-usable-as-tool -- Webhook triggers receive events and have no executable AI-agent action. */
 export class FormbaseTrigger implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'formbase Trigger',
@@ -84,8 +128,7 @@ export class FormbaseTrigger implements INodeType {
     icon: { light: 'file:formbase-logo.svg', dark: 'file:formbase-logo.dark.svg' },
     group: ['trigger'],
     version: 1,
-    subtitle:
-      '={{ ({ submission_created: "On public link submission created", submission_updated: "On public link submission updated", submission_abandoned: "On public link submission abandoned", request_completed: "On request completed", request_expired: "On request expired", request_canceled: "On request canceled" })[$parameter["event"]] }}',
+    subtitle: EVENT_SUBTITLE,
     description:
       'Starts the workflow when a formbase request is completed, expires or is canceled, or when a respondent submits a form through its public link',
     defaults: {
@@ -95,7 +138,7 @@ export class FormbaseTrigger implements INodeType {
     outputs: [NodeConnectionTypes.Main],
     credentials: [
       {
-        name: FORMBASE_OAUTH2_CREDENTIAL_NAME,
+        name: FORMBASE_CREDENTIAL_TYPE,
         required: true,
       },
     ],
@@ -133,49 +176,7 @@ export class FormbaseTrigger implements INodeType {
         displayName: 'Event',
         name: 'event',
         type: 'options',
-        // eslint-disable-next-line @n8n/community-nodes/options-sorted-alphabetically -- The default comes first.
-        options: [
-          {
-            name: 'Public Link Submission Created',
-            value: FORMBASE_WEBHOOK_EVENTS.submissionCreated,
-            action: 'On public link submission created',
-            description:
-              'Runs when a respondent submits the selected form through its public link (event type submission.completed). An edit after submit runs Public Link Submission Updated; a completed request runs Request Completed.',
-          },
-          {
-            name: 'Public Link Submission Updated',
-            value: FORMBASE_WEBHOOK_EVENTS.submissionUpdated,
-            action: 'On public link submission updated',
-            description:
-              'Runs when a respondent edits a public-link submission they already sent (event type submission.updated). The form must allow editing after submit.',
-          },
-          {
-            name: 'Public Link Submission Abandoned',
-            value: FORMBASE_WEBHOOK_EVENTS.submissionAbandoned,
-            action: 'On public link submission abandoned',
-            description:
-              'Runs when a respondent leaves the selected form, opened through its public link, without submitting it. Needs partial-submission tracking on the workspace.',
-          },
-          {
-            name: 'Request Completed',
-            value: FORMBASE_WEBHOOK_EVENTS.requestCompleted,
-            action: 'On request completed',
-            description:
-              'Runs when a recipient completes a request for the selected form, with the answers and the outcome (event type request.completed)',
-          },
-          {
-            name: 'Request Expired',
-            value: FORMBASE_WEBHOOK_EVENTS.requestExpired,
-            action: 'On request expired',
-            description: 'Runs when a request for the selected form reaches its expiry without being completed',
-          },
-          {
-            name: 'Request Canceled',
-            value: FORMBASE_WEBHOOK_EVENTS.requestCanceled,
-            action: 'On request canceled',
-            description: 'Runs when a request for the selected form is canceled, with the reason when one was given',
-          },
-        ],
+        options: EVENT_OPTIONS,
         default: 'submission_created',
         description:
           'Event to subscribe to. Public link submission events cover the public link only; a completed request runs Request Completed instead. Abandoned needs partial-submission tracking.',
@@ -198,14 +199,7 @@ export class FormbaseTrigger implements INodeType {
     ],
   }
 
-  methods = {
-    loadOptions: {
-      async getForms(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
-        const forms = await listForms(this)
-        return forms.map((form) => ({ name: form.name, value: form.id }))
-      },
-    },
-  }
+  methods = { loadOptions: { getForms } }
 
   webhookMethods = {
     default: {
@@ -291,4 +285,3 @@ export class FormbaseTrigger implements INodeType {
     }
   }
 }
-/* eslint-enable @n8n/community-nodes/node-usable-as-tool */

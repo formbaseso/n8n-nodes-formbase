@@ -60,7 +60,7 @@ describe('formbase node lifecycle', () => {
     const forms = await node.methods.loadOptions.getForms.call(makeHelpers(formbase.baseUrl) as never)
     expect(forms).toEqual([
       { name: 'Vendor onboarding', value: 'form_live' },
-      { name: 'Draft', value: 'form_draft' },
+      { name: 'Draft (not published)', value: 'form_draft' },
     ])
     const picker = { ...makeHelpers(formbase.baseUrl), getCurrentNodeParameter: () => 'form_live' }
     expect(await node.methods.loadOptions.getPrefillKeys.call(picker as never)).toEqual([{ name: 'Company (company_name)', value: 'company_name' }])
@@ -139,5 +139,50 @@ describe('formbase node lifecycle', () => {
     await expect(runOperation({ operation: 'create', formId: 'form_draft' })).rejects.toSatisfy(
       (error: unknown) => error instanceof NodeApiError && error.httpCode === '400' && error.description === 'FORM_NOT_PUBLISHED'
     )
+  })
+
+  it('maps the fields of a version 2 node and picks the form and the request with resource locators', async () => {
+    const node = new Formbase()
+    const v2 = { ...makeHelpers(formbase.baseUrl), getNode: vi.fn().mockReturnValue({ name: 'formbase', type: 'formbase', typeVersion: 2 }) }
+    const formLocator = { __rl: true, mode: 'list', value: 'form_live' }
+
+    // 1. The Fields mapper lists the form's fields, context ones marked.
+    const picker = { ...v2, getCurrentNodeParameter: (_name: string, options?: { extractValue?: boolean }) => (options?.extractValue ? 'form_live' : formLocator) }
+    const { fields } = await node.methods.resourceMapping.getMappingFields.call(picker as never)
+    expect(fields.map((field) => [field.id, field.displayName])).toEqual([
+      ['company_name', 'Company (company_name)'],
+      ['case_id', 'Case (case_id) · context'],
+    ])
+
+    // 2. Map Automatically sends the input item's field keys, split by the live field list.
+    const parameters: Record<string, unknown> = {
+      resource: 'request',
+      operation: 'create',
+      formId: formLocator,
+      'fields.mappingMode': 'autoMapInputData',
+      additionalFields: { externalId: 'run-v2' },
+    }
+    const ctx = {
+      ...makeExecuteContext(parameters),
+      getNode: v2.getNode,
+      getInputData: vi.fn().mockReturnValue([{ json: { company_name: 'Acme', case_id: 'CASE-9', note: 'not a field' } }]),
+      getNodeParameter: vi.fn((name: string, _itemIndex: number, fallback?: unknown, options?: { extractValue?: boolean }) => {
+        const value = parameters[name] ?? fallback
+        return options?.extractValue && typeof value === 'object' && value !== null && '__rl' in value ? (value as { value: unknown }).value : value
+      }),
+    }
+    const [[created]] = await node.execute.call(ctx as never)
+    const id = String((created.json as { id: string }).id)
+    expect(formbase.requests.get(id)?.params).toEqual({
+      formId: 'form_live',
+      prefill: { company_name: 'Acme' },
+      context: { case_id: 'CASE-9' },
+      externalId: 'run-v2',
+      idempotencyKey: 'run-v2',
+    })
+
+    // 3. The request picker lists it, labelled by where it stands and the caller's id for it.
+    const { results } = await node.methods.listSearch.searchRequests.call(v2 as never)
+    expect(results).toContainEqual({ name: 'No recipient · pending · run-v2', value: id })
   })
 })

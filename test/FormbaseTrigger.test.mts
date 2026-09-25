@@ -225,8 +225,8 @@ describe('FormbaseTrigger.methods.loadOptions.getForms', () => {
       if (method === 'workspaces.list') return { items: [{ id: 'ws_1', name: 'Acme' }], hasMore: false }
       return {
         items: [
-          { id: 'f1', name: 'Customer Survey', workspaceId: 'ws_1' },
-          { id: 'f2', name: 'Feedback', workspaceId: 'ws_1' },
+          { id: 'f1', name: 'Customer Survey', workspaceId: 'ws_1', isPublished: true },
+          { id: 'f2', name: 'Feedback', workspaceId: 'ws_1', isPublished: true },
         ],
         hasMore: false,
         nextCursor: null,
@@ -246,15 +246,15 @@ describe('FormbaseTrigger.methods.loadOptions.getForms', () => {
   it('follows the cursor across forms.list pages', async () => {
     respond((method, params) => {
       if (method === 'workspaces.list') return { items: [{ id: 'ws_1', name: 'Acme' }], hasMore: false }
-      if (!params.cursor) return { items: [{ id: 'f1', name: 'Survey' }], hasMore: true, nextCursor: 'cursor_2' }
-      return { items: [{ id: 'f2', name: 'Signup' }], hasMore: false, nextCursor: null }
+      if (!params.cursor) return { items: [{ id: 'f1', name: 'Survey', isPublished: true }], hasMore: true, nextCursor: 'cursor_2' }
+      return { items: [{ id: 'f2', name: 'Signup', isPublished: false }], hasMore: false, nextCursor: null }
     })
 
     const result = await new FormbaseTrigger().methods.loadOptions.getForms.call(makeLoadOptionsContext() as never)
 
     expect(result).toEqual([
       { name: 'Survey', value: 'f1' },
-      { name: 'Signup', value: 'f2' },
+      { name: 'Signup (not published)', value: 'f2' },
     ])
     calledWith('forms.list', { workspaceId: 'ws_1', limit: 100, cursor: 'cursor_2' })
   })

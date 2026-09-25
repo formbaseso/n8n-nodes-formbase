@@ -64,7 +64,7 @@ describe('formbase Trigger lifecycle', () => {
     const forms = await trigger.methods.loadOptions.getForms.call(makeHelpers(formbase.baseUrl) as never)
     expect(forms).toEqual([
       { name: 'Vendor onboarding', value: 'form_live' },
-      { name: 'Draft', value: 'form_draft' },
+      { name: 'Draft (not published)', value: 'form_draft' },
     ])
 
     // 2. Activation finds nothing registered yet, then registers a signed subscription.

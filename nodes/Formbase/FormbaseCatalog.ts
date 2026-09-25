@@ -5,6 +5,7 @@ import { formbaseApiRequest, type FormbaseRpcContext } from './GenericFunctions'
 export interface FormSummary {
   id: string
   name: string
+  isPublished: boolean
 }
 
 export interface WorkspaceSummary {
@@ -18,6 +19,12 @@ export interface ListResponse<T> {
   nextCursor?: string | null
 }
 
+/** An option of a choice field, or a row or column of a matrix: its stable key and the label a person sees. */
+export interface KeyedLabel {
+  key: string
+  label: string
+}
+
 /** One row of `fields.list`: a keyed field of the form's current published version. */
 export interface FormField {
   key: string
@@ -26,9 +33,22 @@ export interface FormField {
   prefillable?: boolean
   context?: boolean
   calculated?: boolean
+  options?: KeyedLabel[]
+  rows?: KeyedLabel[]
+  columns?: KeyedLabel[]
+  members?: FormField[]
+}
+
+/** A request as `requests.list` summarizes it, as far as a picker needs it. */
+export interface RequestSummary {
+  id: string
+  status: string
+  externalId: string | null
+  recipient: { email: string | null; name: string | null }
 }
 
 const PAGE_SIZE = 100
+const REQUEST_PAGE_SIZE = 25
 
 /**
  * Every item of a cursor-paged list method, up to `max`. formbase answers
@@ -77,6 +97,34 @@ export async function readWorkspace(context: FormbaseRpcContext): Promise<Worksp
 export async function listForms(context: FormbaseRpcContext): Promise<FormSummary[]> {
   const workspace = await readWorkspace(context)
   return collectPages<FormSummary>(context, 'forms.list', { workspaceId: workspace.id })
+}
+
+/**
+ * The forms of the connected workspace whose name fuzzily matches `query`, up
+ * to one page. formbase answers a name search with one capped page and no
+ * cursor, so a picker asks the user to type more instead of paging.
+ */
+export async function searchFormsByName(context: FormbaseRpcContext, query: string): Promise<FormSummary[]> {
+  const workspace = await readWorkspace(context)
+  const page = await formbaseApiRequest<ListResponse<FormSummary>>(context, 'forms.list', {
+    workspaceId: workspace.id,
+    query,
+    limit: PAGE_SIZE,
+  })
+  return page.items
+}
+
+/** One page of the workspace's requests, newest first, from `cursor` on. */
+export async function listRequestsPage(
+  context: FormbaseRpcContext,
+  cursor: string | undefined
+): Promise<ListResponse<RequestSummary>> {
+  const workspace = await readWorkspace(context)
+  return formbaseApiRequest<ListResponse<RequestSummary>>(context, 'requests.list', {
+    workspaceId: workspace.id,
+    limit: REQUEST_PAGE_SIZE,
+    ...(cursor ? { cursor } : {}),
+  })
 }
 
 /** The keyed fields of a form's current published version; empty while the form is unpublished. */

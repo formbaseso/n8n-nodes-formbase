@@ -217,7 +217,7 @@ describe('Formbase.methods.loadOptions', () => {
     respond((method) =>
       method === 'workspaces.list'
         ? { items: [{ id: 'ws_1', name: 'Acme' }], hasMore: false }
-        : { items: [{ id: 'f1', name: 'Vendor onboarding' }], hasMore: false, nextCursor: null }
+        : { items: [{ id: 'f1', name: 'Vendor onboarding', isPublished: true }], hasMore: false, nextCursor: null }
     )
 
     expect(await new Formbase().methods.loadOptions.getForms.call(makeLoadOptionsContext() as never)).toEqual([

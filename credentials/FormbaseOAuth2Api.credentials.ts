@@ -1,9 +1,9 @@
 import type { Icon, ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow'
 
-import { FORMBASE_API_RESOURCE_URL, FORMBASE_OAUTH2_CREDENTIAL_NAME } from '../nodes/Formbase/constants'
+import { FORMBASE_API_RESOURCE_URL, FORMBASE_CREDENTIAL_TYPE } from '../nodes/Formbase/constants'
 
 export class FormbaseOAuth2Api implements ICredentialType {
-  name = FORMBASE_OAUTH2_CREDENTIAL_NAME
+  name = FORMBASE_CREDENTIAL_TYPE
 
   extends = ['oAuth2Api']
 
