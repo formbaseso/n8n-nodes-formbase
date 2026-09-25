@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented here.
 
+## 0.10.0 - 2026-09-25
+
+- **formbase node version 2**, the default for new nodes. Workflows saved with version 1 keep their node and parameters unchanged.
+  - **Fields** replaces the Prefill and Context lists on Create: pick a form and it lists every field a request can fill in, with its question and field key. A choice question is a dropdown of its options, a number, switch, date or time gets its own input, and context fields are marked. A date is sent as `2026-03-04` whatever the picker or expression produced. **Map Automatically** sends each key of the input item that is a field key of the form and leaves the rest out.
+  - **Form** is searchable by name, or takes an ID. **Request** on Get, Remind, Cancel and Replay Callback takes an ID, as before, or lists the workspace's newest requests, labelled by recipient, status and External ID.
+  - Create reads a form's field list once per execution, however many items it creates requests for.
+- A retried Create with the same External ID and Documents gets the original request back instead of `CONFLICT`, although it uploads its files again: formbase now counts a document by its bytes for idempotency. Needs a formbase backend with that rule; the node itself is unchanged.
+- Form pickers on both nodes mark a form that is not published yet with "(not published)".
+- `examples/formbase-request-wait.json` uses version 2 and the Fields mapper.
+- Internal: the node's parameters, operations and pickers move out of `Formbase.node.ts` into `actions/`, `FormFields.ts` and `FormbaseMethods.ts`, operations dispatch from one table, and the trigger's event list drives its subtitle. `@n8n/node-cli` 0.49 and Vitest 5; `package-lock.json` is in sync again for `npm ci`, and the stale `pnpm-lock.yaml` is gone.
+
 ## 0.9.2 - 2026-09-25
 
 - The README documents booking and payment answers. Since event `apiVersion` `2026-09-24`, a Schedule appointment answer in `data.answers` is an object (`status`, `start`, `end`, `timeZone`, `attendee`, `meetingUrl`, `provider`, `providerBookingId`, `eventTitle`) instead of a sentence, and a Payment question has an answer of its own (`status`, `amount`, `currency`, `amountRefunded`, `receiptUrl`, `paidAt`, `refundedAt`, `disputedAt`, `provider`, `providerPaymentIntentId`). `data.display` keeps one line of text for each. The node passes the event through unchanged, so a workflow reads `{{ $json.data.answers.<field_key>.start }}` without a node change; one that read the booking as text reads `data.display.<field_key>` instead.

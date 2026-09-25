@@ -142,7 +142,7 @@ describe('formbase node description', () => {
   it('is registered next to the trigger in package.json', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string; n8n: { nodes: string[] } }
 
-    expect(pkg.version).toBe('0.9.2')
+    expect(pkg.version).toBe('0.10.0')
     expect(pkg.n8n.nodes).toEqual(['dist/nodes/Formbase/Formbase.node.js', 'dist/nodes/Formbase/FormbaseTrigger.node.js'])
   })
 
@@ -217,7 +217,7 @@ describe('Formbase.methods.loadOptions', () => {
     respond((method) =>
       method === 'workspaces.list'
         ? { items: [{ id: 'ws_1', name: 'Acme' }], hasMore: false }
-        : { items: [{ id: 'f1', name: 'Vendor onboarding' }], hasMore: false, nextCursor: null }
+        : { items: [{ id: 'f1', name: 'Vendor onboarding', isPublished: true }], hasMore: false, nextCursor: null }
     )
 
     expect(await new Formbase().methods.loadOptions.getForms.call(makeLoadOptionsContext() as never)).toEqual([

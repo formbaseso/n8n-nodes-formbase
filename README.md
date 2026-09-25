@@ -5,10 +5,12 @@ Community nodes for [n8n](https://n8n.io) that create [formbase](https://formbas
 ## Features
 
 - **formbase** node: create a request for a form and a recipient, with prefilled and read-only fields, context, reminders, expiry and delivery by email; get, cancel, remind, list requests; replay a request's callback.
+- Map a request's fields like any n8n mapping: pick the form, and **Fields** lists its questions with a dropdown for each choice, a number or date input where formbase expects one, and the form's context fields. **Map Automatically** sends an input item's keys that match the form's field keys.
+- Search forms by name, and pick a request from the workspace's newest ones, or pass an ID.
 - Pause a workflow until the recipient answers: **Wait for the Outcome** points the request's callback at n8n's Wait node, so the workflow resumes with the completed, expired or canceled request as its input.
 - **formbase Trigger** node: start a workflow when a request is completed, expires or is canceled, or when a respondent submits a form through its public link. `data.request` carries the request ID and the caller's `externalId` and `metadata`, so the workflow that created the request can pick up where it left off.
 - Trigger on abandoned submissions after a selected 12-hour, 1-day, 3-day, or 1-week idle window.
-- Load forms dynamically from the workspace the credential is scoped to, across every page.
+- Load forms dynamically from the workspace the credential is scoped to, across every page, with unpublished forms marked.
 - Register and remove formbase webhook subscriptions with the n8n workflow lifecycle.
 - Verify every webhook with HMAC-SHA256 and reject stale or forged requests.
 - Connect through workspace-scoped OAuth 2.1 with PKCE and automatic refresh-token rotation.
@@ -51,16 +53,34 @@ Add **formbase** to a workflow, select the **Request** resource and an operation
 
 ### Create a request
 
-1. Pick the **Form**. The picker lists the published and unpublished forms of the credential's workspace; a request needs a published form.
+1. Pick the **Form**: search the credential's workspace by name, or paste its ID. Forms that are not published yet read "(not published)"; a request needs a published form.
 2. Enter the **Recipient Email** when formbase should email the link or send reminders; leave it empty for a request you hand out yourself.
-3. Under **Prefill**, add one entry per field key and value. The key picker loads the form's prefillable fields; turn on **Parse as JSON** for a value that is not plain text, such as a repeating group's rows or a number.
-4. Under **Context**, add values for the form's context fields: they are stored with the request and returned with the answers, but the recipient never sees them.
-5. Under **Read-Only Fields**, pick the prefilled fields the recipient may see but not change.
-6. Under **Documents**, add the files the recipient should read or download, such as a contract or a price list. Each entry names an **Input Binary Field** of the incoming item (a file from an HTTP Request, Google Drive or Read Binary File node), an optional **Name** the recipient sees, and the **Documents Block** it goes into. The form needs a Documents block; leave the block empty when the form has one, and pick it when the form has several. Files are PDFs or images of up to 25 MB. The node uploads each file before it creates the request, and the recipient sees them below the documents the form already has.
-7. In **Additional Fields**, set **Delivery** to `Email` to have formbase send the link, **Reminders** such as `2d, 5d` (leave the field empty to send none; remove it to inherit the form's schedule), **Expires At**, **Language**, **Recipient Name**, **Metadata** (a JSON object handed back with every event), **Test Mode**, or a **Callback URL** of your own.
-8. Set **External ID** to your own identifier, for example `{{ $execution.id }}`. The node also sends it as the request's `idempotencyKey`, so a retried execution gets the same request back (`deduplicated: true`) instead of creating a second one.
+3. Under **Fields**, fill in the answers the recipient should find prefilled, and the form's context fields (marked `· context`): values stored with the request and returned with the answers that the recipient never sees. Each field shows its question and field key, and takes the shape formbase expects:
+
+   | Field                                | Input                                                        |
+   | ------------------------------------ | ------------------------------------------------------------ |
+   | Text, email, phone, URL, long text   | Text                                                         |
+   | Number, rating, scale                | Number                                                       |
+   | Switch                               | On or off                                                    |
+   | Date, time                           | Date or time picker; a date is sent as `2026-03-04`          |
+   | Single choice (radio, select)        | Dropdown of the options; the option key is sent              |
+   | Multiple choice, ranking, pictures   | JSON list of option keys, such as `["news", "offers"]`; the label lists the keys |
+   | Matrix                               | JSON object of row key to column key                         |
+   | Repeating group                      | JSON list of rows, such as `[{ "name": "Ada" }]`             |
+
+   Leave a field empty to leave it unanswered. With **Map Automatically**, the node sends every key of the input item that is a field key of the form and ignores the rest, so an item like `{ "company_name": "Acme", "case_id": "CASE-9" }` needs no mapping at all. Fields a caller can never fill in, such as file uploads, signatures, payments, bookings and calculated fields, are not listed.
+4. Under **Read-Only Fields**, pick the prefilled fields the recipient may see but not change.
+5. Under **Documents**, add the files the recipient should read or download, such as a contract or a price list. Each entry names an **Input Binary Field** of the incoming item (a file from an HTTP Request, Google Drive or Read Binary File node), an optional **Name** the recipient sees, and the **Documents Block** it goes into. The form needs a Documents block; leave the block empty when the form has one, and pick it when the form has several. Files are PDFs or images of up to 25 MB. The node uploads each file before it creates the request, and the recipient sees them below the documents the form already has.
+6. In **Additional Fields**, set **Delivery** to `Email` to have formbase send the link, **Reminders** such as `2d, 5d` (leave the field empty to send none; remove it to inherit the form's schedule), **Expires At**, **Language**, **Recipient Name**, **Metadata** (a JSON object handed back with every event), **Test Mode**, or a **Callback URL** of your own.
+7. Set **External ID** to your own identifier, for example `{{ $execution.id }}`. The node also sends it as the request's `idempotencyKey`, so a retried execution gets the same request back (`deduplicated: true`) instead of creating a second one.
 
 Every request also carries `formId`, `status`, `url`, `externalId`, `isTest`, `deliveryStatus`, `hasCallback`, `remindersSent`, `expiresAt` and `createdAt` in its summary.
+
+**Get**, **Remind**, **Cancel** and **Replay Callback** take the **Request** by ID, usually `{{ $json.id }}` from a Create node, or from a list of the workspace's newest requests, labelled by recipient, status and External ID.
+
+#### Node versions
+
+New nodes are version 2. A workflow saved with version 1 keeps it and keeps working unchanged: its Form is a plain dropdown, its Request ID a text box, and it lists **Prefill** and **Context** values as key/value rows, with **Parse as JSON** for a value that is not text. To move such a node to the Fields mapper, add a new formbase node and copy the values over.
 
 ### Wait for the outcome
 
@@ -107,7 +127,7 @@ One channel, one event: **Public Link Submission Created** runs for public-link 
 
 ## Example workflows
 
-- [`examples/formbase-request-wait.json`](examples/formbase-request-wait.json): a formbase **Create** node with **Wait for the Outcome**, a **Wait** node, a **Switch** on `request.completed` / `request.expired` / `request.canceled`, and a **Set** node that reads the request ID, outcome and an answer. Connect the credential, pick a form with a `company_name` field (or change the prefill and the Set node), and run it.
+- [`examples/formbase-request-wait.json`](examples/formbase-request-wait.json): a formbase **Create** node with **Wait for the Outcome**, a **Wait** node, a **Switch** on `request.completed` / `request.expired` / `request.canceled`, and a **Set** node that reads the request ID, outcome and an answer. Connect the credential, pick a form with a `company_name` field (or change the Fields mapping and the Set node), and run it.
 - [`examples/formbase-submission.json`](examples/formbase-submission.json): a **formbase Trigger** that maps event ID, event type, submission ID, respondent email, and form name into stable output fields. Connect the credential, select a form, then activate the workflow.
 
 ## Output
@@ -243,6 +263,8 @@ npm test
 npm run build
 npm run lint
 ```
+
+The formbase node lives in `nodes/Formbase/`: `Formbase.node.ts` wires the node together, `actions/` holds its parameters (`RequestDescription.ts`), what each operation calls (`RequestOperations.ts`) and how Create builds its body (`RequestCreate.ts`), `FormFields.ts` maps `fields.list` onto the Fields mapper, and `FormbaseMethods.ts` holds the pickers both nodes share.
 
 `npm test` runs unit tests plus lifecycle tests that drive both nodes against an in-process formbase API over real HTTP (`test/fakeFormbase.mts`). `npm run dev` starts n8n with the node loaded and rebuilds on changes. Compiled package files are written to `dist/`. Run `npm pack --dry-run` before publishing to inspect package contents.
 

@@ -168,7 +168,7 @@ export class FakeFormbase {
     if (params.workspaceId !== this.workspace.id) return notFound('Workspace not found')
     const limit = Number(params.limit ?? 100)
     const start = params.cursor ? Number(params.cursor) : 0
-    const items = this.forms.slice(start, start + limit).map((form) => ({ id: form.id, name: form.name, workspaceId: this.workspace.id }))
+    const items = this.forms.slice(start, start + limit).map((form) => ({ id: form.id, name: form.name, workspaceId: this.workspace.id, isPublished: form.published }))
     const hasMore = start + limit < this.forms.length
     return { data: { items, hasMore, nextCursor: hasMore ? String(start + limit) : null } }
   }
@@ -375,6 +375,12 @@ function conflict(reason: string): RpcResult {
   return { status: 409, error: { code: 'CONFLICT', message: reason } }
 }
 
+/** The summary's recipient, `{ email, name }` with `null` for what the create body left out, as formbase answers it. */
+function recipientOf(params: Record<string, unknown>): { email: string | null; name: string | null } {
+  const recipient = (params.recipient ?? {}) as { email?: string; name?: string }
+  return { email: recipient.email ?? null, name: recipient.name ?? null }
+}
+
 /** What `requests.create`, `requests.cancel`, `requests.remind` and `requests.list` return: the summary, never the callback URL. */
 function requestSummary(request: StoredRequest) {
   return {
@@ -384,6 +390,7 @@ function requestSummary(request: StoredRequest) {
     formId: request.formId,
     externalId: request.externalId,
     isTest: request.isTest,
+    recipient: recipientOf(request.params),
     deliveryStatus: 'not_requested',
     hasCallback: request.params.callbackUrl !== undefined,
     remindersSent: request.remindersSent,
