@@ -62,6 +62,9 @@ export const REQUEST_OPERATIONS: Record<RequestOperation, OperationRunner> = {
   },
 }
 
+const REQUEST_OPERATION_NAMES: ReadonlySet<string> = new Set(Object.keys(REQUEST_OPERATIONS))
+
+/** An own key of the dispatch table; `in` would also accept inherited keys such as `toString`. */
 export function isRequestOperation(operation: string): operation is RequestOperation {
-  return operation in REQUEST_OPERATIONS
+  return REQUEST_OPERATION_NAMES.has(operation)
 }

@@ -330,6 +330,13 @@ describe('Formbase.execute: create with the Fields mapper', () => {
   })
 })
 
+describe('Formbase.execute: operations', () => {
+  it('refuses an operation it does not have, even one named like an object method', async () => {
+    await expect(run([{ resource: 'request', operation: 'toString' }])).rejects.toThrow('The operation "toString" is not supported')
+    expect(mockedRequest).not.toHaveBeenCalled()
+  })
+})
+
 describe('Formbase.execute: a request picked with the resource locator', () => {
   it.each([
     ['get', 'requests.get'],
