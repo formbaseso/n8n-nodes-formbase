@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented here.
 
-## Unreleased
+## 0.10.0 - 2026-09-25
 
 - **formbase node version 2**, the default for new nodes. Workflows saved with version 1 keep their node and parameters unchanged.
   - **Fields** replaces the Prefill and Context lists on Create: pick a form and it lists every field a request can fill in, with its question and field key. A choice question is a dropdown of its options, a number, switch, date or time gets its own input, and context fields are marked. A date is sent as `2026-03-04` whatever the picker or expression produced. **Map Automatically** sends each key of the input item that is a field key of the form and leaves the rest out.
