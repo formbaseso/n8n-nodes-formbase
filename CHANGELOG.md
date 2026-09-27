@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented here.
 
+## 0.10.1 - 2026-09-27
+
+Copy and defaults for n8n's community node verification. Workflows keep working unchanged.
+
+- The credential is named **Formbase OAuth2 API**. n8n's verification scanner requires title case and ignores lint exceptions, so the lowercase brand name cannot stay here. Existing credentials keep working: only the display name changed.
+- Operation actions drop the article, as n8n's UX guidelines ask: **Create request**, **Get request**, **Cancel request**, **Remind request recipient**, **Replay request callback**.
+- **Request** on Get, Remind, Cancel and Replay Callback opens on **From List** for a new node. A saved node keeps the mode it was saved with.
+- Placeholders start with "e.g.", and descriptions and errors name a parameter in single quotes, such as 'Wait for the Outcome'.
+
 ## 0.10.0 - 2026-09-25
 
 - **formbase node version 2**, the default for new nodes. Workflows saved with version 1 keep their node and parameters unchanged.
