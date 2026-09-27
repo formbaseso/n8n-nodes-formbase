@@ -107,7 +107,7 @@ function readMetadata(context: IExecuteFunctions, metadata: unknown, itemIndex: 
 function readExpiresAt(context: IExecuteFunctions, expiresAt: string, itemIndex: number): number {
   const timestamp = Date.parse(expiresAt)
   if (Number.isNaN(timestamp)) {
-    throw new NodeOperationError(context.getNode(), `Expires At "${expiresAt}" is not a date`, { itemIndex })
+    throw new NodeOperationError(context.getNode(), `'Expires At' value ${expiresAt} is not a date`, { itemIndex })
   }
   return timestamp
 }
@@ -130,7 +130,7 @@ function readResumeUrl(context: IExecuteFunctions, itemIndex: number): string {
   if (typeof resumeUrl !== 'string' || resumeUrl.length === 0) {
     throw new NodeOperationError(
       context.getNode(),
-      'n8n did not provide a resume URL for this execution. Turn off "Wait for the Outcome", or run the workflow where a Wait node set to "On Webhook Call" can resume it.',
+      "n8n did not provide a resume URL for this execution. Turn off 'Wait for the Outcome', or run the workflow where a Wait node set to 'On Webhook Call' can resume it.",
       { itemIndex }
     )
   }
@@ -156,7 +156,7 @@ async function uploadDocuments(context: IExecuteFunctions, formId: string, itemI
     const bytes = await context.helpers.getBinaryDataBuffer(itemIndex, binaryProperty)
     const name = row.name?.trim() || binary.fileName
     if (!name) {
-      throw new NodeOperationError(context.getNode(), `The file in "${binaryProperty}" has no file name; set a Name for it`, { itemIndex })
+      throw new NodeOperationError(context.getNode(), `The file in ${binaryProperty} has no file name; set a 'Name' for it`, { itemIndex })
     }
 
     const reserved = await formbaseApiRequest<ReservedDocument>(context, 'documents.create', {
@@ -188,7 +188,7 @@ export async function buildCreateParams(context: IExecuteFunctions, itemIndex: n
   if (waitForOutcome && additional.callbackUrl) {
     throw new NodeOperationError(
       context.getNode(),
-      '"Wait for the Outcome" already sets the callback URL. Turn it off to use a Callback URL of your own.',
+      "'Wait for the Outcome' already sets the callback URL. Turn it off to use a 'Callback URL' of your own.",
       { itemIndex }
     )
   }

@@ -29,7 +29,7 @@ OAuth setup requires n8n 2.30 or newer.
 
 ## Configure credentials
 
-1. In n8n, create a **formbase OAuth2 API** credential.
+1. In n8n, create a **Formbase OAuth2 API** credential.
 2. Select **Connect my account**.
 3. Sign in to formbase, choose workspace, and approve requested API access.
 4. Select **Test**. n8n calls `me.get` to verify connection.

@@ -94,7 +94,7 @@ function keyValueCollection(name: 'prefill' | 'context'): INodeProperties {
             name: 'value',
             type: 'string',
             default: '',
-            description: 'Sent as text, or as the value it decodes to when Parse as JSON is on',
+            description: "Sent as text, or as the value it decodes to when 'Parse as JSON' is on",
           },
           {
             displayName: 'Parse as JSON',
@@ -121,19 +121,19 @@ const operationProperty: INodeProperties = {
     {
       name: 'Cancel',
       value: 'cancel',
-      action: 'Cancel a request',
+      action: 'Cancel request',
       description: 'Withdraw a pending request so its link stops working',
     },
     {
       name: 'Create',
       value: 'create',
-      action: 'Create a request',
+      action: 'Create request',
       description: 'Ask one recipient to complete a published form',
     },
     {
       name: 'Get',
       value: 'get',
-      action: 'Get a request',
+      action: 'Get request',
       description: 'Read a request, with its answers once it is completed',
     },
     {
@@ -145,13 +145,13 @@ const operationProperty: INodeProperties = {
     {
       name: 'Remind',
       value: 'remind',
-      action: 'Remind a request recipient',
+      action: 'Remind request recipient',
       description: 'Email the recipient a reminder now, outside the reminder schedule',
     },
     {
       name: 'Replay Callback',
       value: 'replayCallback',
-      action: 'Replay a request callback',
+      action: 'Replay request callback',
       description: 'Send the callback of a completed, expired or canceled request again',
     },
   ],
@@ -164,7 +164,7 @@ const createProperties: INodeProperties[] = [
     displayName: 'Recipient Email',
     name: 'recipientEmail',
     type: 'string',
-    placeholder: 'name@email.com',
+    placeholder: 'e.g. name@example.com',
     displayOptions: showFor(['create']),
     default: '',
     description: 'Who the request is for. Needed to send the invitation email and reminders.',
@@ -254,7 +254,7 @@ const createProperties: INodeProperties[] = [
     displayOptions: showFor(['create']),
     default: false,
     description:
-      'Whether to point the request callback at this execution\'s resume URL. Follow this node with a Wait node set to "On Webhook Call": the workflow resumes with the request event when the request is completed, expires or is canceled.',
+      "Whether to point the request callback at this execution's resume URL. Follow this node with a Wait node set to 'On Webhook Call': the workflow resumes with the request event when the request is completed, expires or is canceled.",
   },
   {
     displayName: 'Additional Fields',
@@ -309,7 +309,7 @@ const createProperties: INodeProperties[] = [
         name: 'language',
         type: 'string',
         default: '',
-        placeholder: 'en',
+        placeholder: 'e.g. en',
         description: 'Language the form opens in and the invitation is written in; must be published for the form',
       },
       {
@@ -330,7 +330,7 @@ const createProperties: INodeProperties[] = [
         name: 'reminders',
         type: 'string',
         default: '',
-        placeholder: '2d, 5d',
+        placeholder: 'e.g. 2d, 5d',
         description:
           "Idle offsets after which to remind the recipient, comma-separated, at most five. Leave empty to send no reminders; remove the field to inherit the form's schedule.",
       },
@@ -361,22 +361,22 @@ const requestIdProperties: INodeProperties[] = [
     name: 'requestId',
     type: 'resourceLocator',
     displayOptions: showFor(REQUEST_ID_OPERATIONS, V2),
-    default: { mode: 'id', value: '' },
+    default: { mode: 'list', value: '' },
     required: true,
-    description: 'The request: usually the ID an earlier Create node returned, or one of the newest requests of the workspace',
+    description: 'The request: one of the newest requests of the workspace, or the ID an earlier Create node returned',
     modes: [
-      {
-        displayName: 'By ID',
-        name: 'id',
-        type: 'string',
-        placeholder: 'e.g. {{ $json.id }}',
-      },
       {
         displayName: 'From List',
         name: 'list',
         type: 'list',
         placeholder: 'Select a request...',
         typeOptions: { searchListMethod: 'searchRequests' },
+      },
+      {
+        displayName: 'By ID',
+        name: 'id',
+        type: 'string',
+        placeholder: 'e.g. {{ $json.id }}',
       },
     ],
   },

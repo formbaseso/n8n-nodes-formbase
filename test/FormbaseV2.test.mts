@@ -133,8 +133,8 @@ describe('formbase node versions', () => {
     }
 
     const requestId = v2Property('requestId')
-    expect(requestId).toMatchObject({ type: 'resourceLocator', default: { mode: 'id', value: '' } })
-    expect(requestId?.modes?.map((mode) => mode.name)).toEqual(['id', 'list'])
+    expect(requestId).toMatchObject({ type: 'resourceLocator', default: { mode: 'list', value: '' } })
+    expect(requestId?.modes?.map((mode) => mode.name)).toEqual(['list', 'id'])
   })
 
   it('maps fields with a resource mapper that follows the picked form', () => {
