@@ -47,7 +47,7 @@ Add **formbase** to a workflow, select the **Request** resource and an operation
 | **Create**          | `requests.create`         | Creates a request for a published form. Returns the request summary, including the request link in `url`.                                                                                                     |
 | **Get**             | `requests.get`            | Reads one request: status, outcome, recipient, `answers` and `display` once it is completed.                                                                                                                 |
 | **Get Many**        | `requests.list`           | Lists the requests of a form or of the whole workspace, newest first, with status, outcome, external ID and test filters. **Return All** follows the cursor across every page; otherwise **Limit** caps it. |
-| **Cancel**          | `requests.cancel`         | Cancels a pending request, with an optional reason the recipient sees.                                                                                                                                       |
+| **Cancel**          | `requests.cancel`         | Cancels a pending request, with an optional reason that comes back as `cancelReason` on the request and in the `request.canceled` event.                                                                     |
 | **Remind**          | `requests.remind`         | Sends the recipient a reminder email now.                                                                                                                                                                    |
 | **Replay Callback** | `requests.replayCallback` | Delivers the callback of a completed, expired or canceled request again, for example after n8n was down.                                                                                                     |
 
@@ -93,7 +93,7 @@ A request is answered minutes or days later. To pause the workflow until then:
 
 [`examples/formbase-request-wait.json`](examples/formbase-request-wait.json) shows the whole pattern: formbase **Create** with **Wait for the Outcome** → **Wait** → **Switch** on the event type → **Set** reading the answers.
 
-A resume URL only exists once the execution runs, so the test run of a Create node in the editor waits for a real answer just like a production run. Give the request an **Expires At** or a **Reminders** schedule so a forgotten request does not hold the execution open forever; an expired request resumes the workflow with `request.expired`. If n8n was unreachable when the callback fired, run **Replay Callback** for the request, or read it with **Get**: the resume URL of a finished execution is gone, so a replay only helps while the execution is still waiting.
+A resume URL only exists once the execution runs, so the test run of a Create node in the editor waits for a real answer just like a production run. A request expires after 30 days unless you set **Expires At**, and expiry resumes the workflow with `request.expired`; set **Expires At** to end the wait sooner. If n8n was unreachable when the callback fired, run **Replay Callback** for the request, or read it with **Get**: the resume URL of a finished execution is gone, so a replay only helps while the execution is still waiting.
 
 The Wait node cannot check the `X-formbase-Signature` header that the callback carries. The resume URL is unguessable, which is what n8n relies on for every Wait node; if that is not enough for a workflow, use the trigger node instead, which verifies every delivery.
 
@@ -112,8 +112,8 @@ Things worth knowing:
 
 1. Add **formbase Trigger** to a workflow.
 2. Select form and event: a request that is completed, expires or is canceled, or a public-link submission that is created, updated or abandoned. For an abandoned-submission event, select how long the response must remain unchanged.
-3. For a test execution, select **Listen for Test Event**, then submit the selected form.
-4. Activate the workflow. n8n registers its production webhook with formbase and removes it when the workflow is deactivated or deleted.
+3. For a test execution, click **Execute step** and submit the selected form within two minutes; that is how long n8n listens. Expired, canceled and abandoned events arrive later, so test those on the published workflow.
+4. Publish the workflow. n8n registers its production webhook with formbase and removes it when the workflow is unpublished or deleted.
 
 n8n webhook URL must be publicly reachable over HTTPS. For reverse-proxy or tunnel deployments, configure n8n's `WEBHOOK_URL` so generated webhook URLs use public origin. For a local n8n, see [Run locally against formbase](#run-locally-against-formbase).
 
@@ -128,7 +128,7 @@ One channel, one event: **Public Link Submission Created** runs for public-link 
 ## Example workflows
 
 - [`examples/formbase-request-wait.json`](examples/formbase-request-wait.json): a formbase **Create** node with **Wait for the Outcome**, a **Wait** node, a **Switch** on `request.completed` / `request.expired` / `request.canceled`, and a **Set** node that reads the request ID, outcome and an answer. Connect the credential, pick a form with a `company_name` field (or change the Fields mapping and the Set node), and run it.
-- [`examples/formbase-submission.json`](examples/formbase-submission.json): a **formbase Trigger** that maps event ID, event type, submission ID, respondent email, and form name into stable output fields. Connect the credential, select a form, then activate the workflow.
+- [`examples/formbase-submission.json`](examples/formbase-submission.json): a **formbase Trigger** that maps event ID, event type, submission ID, respondent email, and form name into stable output fields. Connect the credential, select a form, then publish the workflow.
 
 ## Output
 
@@ -272,21 +272,25 @@ The formbase node lives in `nodes/Formbase/`: `Formbase.node.ts` wires the node 
 
 The credential's server URL is a hidden field fixed to `https://api.formbase.so/api/v1` (`FORMBASE_API_RESOURCE_URL` in `nodes/Formbase/constants.ts`). A local build therefore always talks to production formbase: requests, webhook subscriptions and test submissions it creates are real data in the workspace you connect. Use a workspace meant for testing.
 
-`npm run dev` starts n8n on `http://localhost:5678`. That is enough to connect the credential, but formbase cannot reach `localhost`, so an activated **formbase Trigger** never runs and a **Wait for the Outcome** callback never arrives. Two n8n settings fix this:
+`npm run dev` starts n8n on `http://localhost:5678`. That is enough to connect the credential, but formbase cannot reach `localhost`, so a published **formbase Trigger** never runs and a **Wait for the Outcome** callback never arrives. Two n8n settings fix this:
 
-- `WEBHOOK_URL`: the public address n8n puts into the webhook and resume URLs it generates. The trigger sends its webhook URL to formbase when the workflow is activated (`webhooks.create`), and **Wait for the Outcome** sends `{{ $execution.resumeUrl }}` as the request's callback. Point it at a tunnel to `localhost:5678`, with a trailing `/`.
-- `N8N_EDITOR_BASE_URL`: the address n8n builds the OAuth callback URL from. When `WEBHOOK_URL` points at a tunnel and this is not set, the OAuth callback points at the tunnel too, and n8n answers it with "Unauthorized" because the browser's n8n login cookie belongs to `localhost`. Set it to `http://localhost:5678/`.
+- `WEBHOOK_URL`: the public address n8n puts into the webhook and resume URLs it generates. The trigger sends its webhook URL to formbase when the workflow is published (`webhooks.create`), and **Wait for the Outcome** sends `{{ $execution.resumeUrl }}` as the request's callback. Point it at a tunnel to `localhost:5678`, with a trailing `/`.
+- `N8N_EDITOR_BASE_URL`: the address n8n builds a trigger's test URL for **Execute step** from, and the OAuth callback URL. Set it to the same tunnel address. Left at `http://localhost:5678/`, **Execute step** on a trigger fails with `VALIDATION_ERROR: targetUrl must use https`.
+- `N8N_PROXY_HOPS=1`, so n8n reads the tunnel's forwarded headers.
 
 ```bash
 cloudflared tunnel --url http://localhost:5678   # prints https://<random>.trycloudflare.com
 
 # in a second terminal
 WEBHOOK_URL=https://<random>.trycloudflare.com/ \
-N8N_EDITOR_BASE_URL=http://localhost:5678/ \
+N8N_EDITOR_BASE_URL=https://<random>.trycloudflare.com/ \
+N8N_PROXY_HOPS=1 \
 npm run dev
 ```
 
-A quick tunnel gets a new address every time `cloudflared` restarts. After a restart, update `WEBHOOK_URL`, restart n8n, and deactivate and reactivate each workflow so the trigger registers its new webhook URL with formbase.
+Open n8n through the tunnel address, not `localhost`, from then on: the OAuth callback lands on the tunnel, and it needs the n8n login cookie of that address.
+
+A quick tunnel gets a new address every time `cloudflared` restarts. After a restart, update `WEBHOOK_URL`, restart n8n, and unpublish and publish each workflow again so the trigger registers its new webhook URL with formbase.
 
 ## Release
 

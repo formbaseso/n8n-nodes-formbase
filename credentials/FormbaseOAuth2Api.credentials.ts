@@ -15,7 +15,7 @@ export class FormbaseOAuth2Api implements ICredentialType {
     dark: 'file:../nodes/Formbase/formbase-logo.dark.svg',
   }
 
-  documentationUrl = 'https://github.com/formbaseso/n8n-nodes-formbase#configure-credentials'
+  documentationUrl = 'https://docs.formbase.so/guides/n8n/connect/'
 
   properties: INodeProperties[] = [
     {

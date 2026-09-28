@@ -154,11 +154,11 @@ export class FormbaseTrigger implements INodeType {
       header: 'Listening for formbase events',
       executionsHelp: {
         inactive:
-          'While building the workflow, click <em>Listen for Test Event</em> and submit the form once, or complete, cancel or let a request expire. Events arrive in real time after the workflow is activated.',
+          'While building the workflow, click <em>Execute step</em> and submit the form within two minutes, or complete a request. Expired, canceled and abandoned events arrive later: publish the workflow and check Executions.',
         active:
-          'Events for the selected form trigger this workflow. The webhook remains registered while the workflow is active.',
+          'Events for the selected form trigger this workflow. The webhook stays registered while the workflow is published.',
       },
-      activationHint: 'Activate the workflow to register the webhook with formbase. Deactivating removes it.',
+      activationHint: 'Publish the workflow to register the webhook with formbase. Unpublishing removes it.',
     },
     properties: [
       {

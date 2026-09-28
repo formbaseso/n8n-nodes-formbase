@@ -6,12 +6,12 @@
   "resources": {
     "credentialDocumentation": [
       {
-        "url": "https://github.com/formbaseso/n8n-nodes-formbase#configure-credentials"
+        "url": "https://docs.formbase.so/guides/n8n/connect/"
       }
     ],
     "primaryDocumentation": [
       {
-        "url": "https://github.com/formbaseso/n8n-nodes-formbase"
+        "url": "https://docs.formbase.so/guides/n8n/public-link-submissions/"
       }
     ]
   }
