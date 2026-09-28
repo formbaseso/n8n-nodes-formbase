@@ -2,7 +2,9 @@
 
 All notable changes to this project will be documented here.
 
-## Unreleased
+## 0.10.2 - 2026-09-28
+
+Wording for n8n 2 and documentation links. Workflows keep working unchanged.
 
 - The formbase Trigger panel speaks n8n 2: **Execute step** instead of Listen for Test Event, and **Publish** instead of Activate. It also says that Execute step listens for two minutes, and that expired, canceled and abandoned events are checked on the published workflow.
 - Documentation links in the credential and both nodes point at the n8n guides on docs.formbase.so.
